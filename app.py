@@ -1,43 +1,44 @@
 import streamlit as st
 import pandas as pd
 
-def procesar_excel_flexible(file):
-    # Leer el excel completo inicialmente
-    df_raw = pd.read_excel(file)
-    
-    # BUSCAR EL ENCABEZADO REAL:
-    # Recorremos las primeras 10 filas buscando la palabra 'Artículo' o 'Stock'
-    for i in range(len(df_raw)):
-        fila_valores = df_raw.iloc[i].astype(str).values
-        if any('Artículo' in x or 'Articulo' in x or 'Stock' in x for x in fila_valores):
-            # Encontramos la fila del encabezado
-            df_final = df_raw.iloc[i+1:].copy()
-            df_final.columns = fila_valores
-            return df_final.reset_index(drop=True)
-    return df_raw
+# ... (Funciones de limpieza previas se mantienen igual) ...
 
-# --- INTERFAZ DE CARGA ---
-st.title("Auditoría Grupo Cenoa - Clasificación ABC")
-archivo_subido = st.file_uploader("Subir Reporte de Stock Jujuy", type=['xlsx'])
-
-if archivo_subido:
-    df = procesar_excel_flexible(archivo_subido)
+if st.button("Ejecutar Análisis ABC y Generar Muestra"):
+    # 1. Asegurar que los datos sean numéricos
+    df[col_stock] = pd.to_numeric(df[col_stock], errors='coerce').fillna(0)
+    df[col_costo] = pd.to_numeric(df[col_costo], errors='coerce').fillna(0)
     
-    st.write("### Columnas detectadas:")
-    cols = df.columns.tolist()
+    # 2. Cálculo del ABC
+    df['Valor_Total'] = df[col_stock] * df[col_costo]
+    df = df.sort_values(by='Valor_Total', ascending=False)
+    df['Pct_Acumulado'] = df['Valor_Total'].cumsum() / df['Valor_Total'].sum()
     
-    # El usuario confirma cuáles son las columnas (por si cambian mañana)
-    col_art = st.selectbox("Columna de Artículo", cols, index=cols.index('Artículo') if 'Artículo' in cols else 0)
-    col_stock = st.selectbox("Columna de Stock", cols, index=cols.index('Stock') if 'Stock' in cols else 0)
-    col_costo = st.selectbox("Columna de Costo", cols, index=cols.index('Cto.Rep.') if 'Cto.Rep.' in cols else 0)
+    def asignar_abc(pct):
+        if pct <= 0.80: return 'A'
+        elif pct <= 0.95: return 'B'
+        else: return 'C'
+    
+    df['Categoria'] = df['Pct_Acumulado'].apply(asignar_abc)
 
-    if st.button("Ejecutar Análisis ABC"):
-        # Limpieza de datos: Asegurar que sean números
-        df[col_stock] = pd.to_numeric(df[col_stock], errors='coerce').fillna(0)
-        df[col_costo] = pd.to_numeric(df[col_costo], errors='coerce').fillna(0)
-        
-        # Cálculo del ABC
-        df['Valor_Total'] = df[col_stock] * df[col_costo]
-        # ... (aquí sigue el resto de tu lógica de clasificación)
-        st.success("¡Análisis completado sin errores!")
-        st.dataframe(df[[col_art, col_stock, 'Valor_Total']].head())
+    # 3. GENERACIÓN DE MUESTRA SEGÚN SOLICITUD (85A, 10B, 5C)
+    # Usamos min() por seguridad en caso de que una categoría tenga menos artículos de los pedidos
+    m_a = df[df['Categoria'] == 'A'].sample(n=min(85, len(df[df['Categoria'] == 'A'])))
+    m_b = df[df['Categoria'] == 'B'].sample(n=min(10, len(df[df['Categoria'] == 'B'])))
+    m_c = df[df['Categoria'] == 'C'].sample(n=min(5, len(df[df['Categoria'] == 'C'])))
+    
+    muestra_final = pd.concat([m_a, m_b, m_c])
+
+    # 4. VISUALIZACIÓN
+    st.success(f"Muestra generada con éxito: {len(muestra_final)} artículos seleccionados.")
+    
+    # Definimos las columnas que queremos ver (incluyendo Locación y Descripción)
+    # Buscamos los nombres de columnas que mapeaste anteriormente
+    columnas_a_mostrar = [col_art, 'Descripción', 'Locación', col_stock, 'Categoria']
+    
+    # Verificamos que existan en el df para no tener errores de visualización
+    cols_existentes = [c for c in columnas_a_mostrar if c in muestra_final.columns]
+    
+    st.dataframe(muestra_final[cols_existentes])
+
+    # Guardar en el estado de la sesión para las siguientes pestañas
+    st.session_state['muestra_completa'] = muestra_final
