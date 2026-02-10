@@ -7,7 +7,7 @@ import io
 import bcrypt
 from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 
-# Version: 2.2 - Using gspread directly
+# Version: 2.3 - Force rebuild with gspread (Feb 10, 2026)
 
 # ----------------------------
 # CONFIG
