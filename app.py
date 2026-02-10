@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 import gspread
 import datetime
 import io
@@ -14,12 +13,18 @@ from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 # CONFIG
 # ----------------------------
 st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wide", page_icon="📦")
-conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Get gspread client directly from connection
-client = conn.client
+# Construir cliente gspread directamente desde st.secrets
+try:
+    gs_creds = st.secrets.get("connections", {}).get("gsheets")
+    if not gs_creds:
+        raise KeyError("connections.gsheets not found in secrets")
+    client = gspread.service_account_from_dict(gs_creds)
+except Exception as e:
+    st.error(f"Google Sheets credentials missing or invalid: {e}")
+    st.stop()
 
-# Spreadsheet ID
+# Spreadsheet ID (fijo)
 SPREADSHEET_ID = "1Dwn-uXcsT8CKFKwL0kZ4WyeVSwOGzXGcxMTW1W1bTe4"
 
 SHEET_HIST = "Historial_Inventarios"
