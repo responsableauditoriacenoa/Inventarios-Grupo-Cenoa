@@ -155,7 +155,7 @@ def listar_inventarios_abiertos():
 
 def cargar_detalle(id_inv: str) -> pd.DataFrame:
     df = _read_ws(SHEET_DET)
-    if df.empty or "ID_Inventario" not in df_columns:
+    if df.empty or "ID_Inventario" not in df.columns:
         return pd.DataFrame()
     return df[df["ID_Inventario"].astype(str) == str(id_inv)].copy()
 
