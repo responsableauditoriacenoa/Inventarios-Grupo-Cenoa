@@ -540,26 +540,140 @@ with tab4:
                 st.write("Descargar reporte (.xlsx):")
 
                 def build_report_xlsx():
+                    from openpyxl import Workbook
+                    from openpyxl.utils.dataframe import dataframe_to_rows
+                    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, numbers
+
                     buffer = io.BytesIO()
 
-                    conces = df_det["Concesionaria"].iloc[0] if "Concesionaria" in df_det.columns and len(df_det) else ""
-                    sucu = df_det["Sucursal"].iloc[0] if "Sucursal" in df_det.columns and len(df_det) else ""
+                    # Preparar datos numéricos
+                    dfr = df_det.copy()
+                    stock_col = C_STOCK if C_STOCK in dfr.columns else None
+                    costo_col = C_COSTO if C_COSTO in dfr.columns else None
+                    dfr["_stock_num"] = pd.to_numeric(dfr.get(stock_col, 0), errors="coerce").fillna(0)
+                    dfr["_costo_num"] = pd.to_numeric(dfr.get(costo_col, 0), errors="coerce").fillna(0)
+                    dif = pd.to_numeric(dfr.get("Diferencia", 0), errors="coerce").fillna(0)
 
-                    resumen = pd.DataFrame([{
-                        "ID_Inventario": id_sel,
-                        "Fecha_Reporte": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "Concesionaria": conces,
-                        "Sucursal": sucu,
-                        "Faltantes_Sum": faltantes,
-                        "Sobrantes_Sum": sobrantes,
-                        "Diferencia_Neta": neta,
-                        "Diferencia_Absoluta": absoluta,
-                    }])
+                    muestra_cnt = int(dfr["_stock_num"].sum())
+                    valor_muestra = (dfr["_stock_num"] * dfr["_costo_num"]).sum()
 
-                    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-                        resumen.to_excel(writer, index=False, sheet_name="Resumen")
-                        df_det.to_excel(writer, index=False, sheet_name="Detalle")
+                    # Valores monetarios de faltantes/sobrantes
+                    value_faltantes = ((-dif[dif < 0]) * dfr.loc[dif < 0, "_costo_num"]).sum()
+                    value_sobrantes = ((dif[dif > 0]) * dfr.loc[dif > 0, "_costo_num"]).sum()
+                    value_neta = (dif * dfr["_costo_num"]).sum()
+                    value_absoluta = (dif.abs() * dfr["_costo_num"]).sum()
 
+                    # Porcentaje absoluto respecto a la muestra (evitar div0)
+                    pct_absoluto = (abs(value_neta) / valor_muestra * 100) if valor_muestra else 0
+
+                    # Escala de cumplimiento (umbral, grado)
+                    escala = [(0.00, 100), (0.10, 94), (0.80, 82), (1.60, 65), (2.40, 35), (3.30, 0)]
+                    escala_sorted = sorted(escala, key=lambda x: x[0])
+                    grado = 0
+                    for th, g in escala_sorted:
+                        if pct_absoluto >= th:
+                            grado = g
+
+                    # Crear workbook y hojas
+                    wb = Workbook()
+                    ws = wb.active
+                    ws.title = "Resultado"
+
+                    # Estilos
+                    title_font = Font(size=14, bold=True)
+                    header_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+                    light_red = PatternFill(start_color="FFF2F2", end_color="FFF2F2", fill_type="solid")
+                    bold = Font(bold=True)
+                    center = Alignment(horizontal="center", vertical="center")
+                    money_fmt = "#,##0.00"  # currency without symbol; Excel may use locale
+                    pct_fmt = "0.00%"
+                    thin = Side(border_style="thin", color="000000")
+                    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+                    # Título
+                    ws.merge_cells("A1:D1")
+                    ws["A1"] = "4. Resultado Inventario Rotativo"
+                    ws["A1"].font = title_font
+                    ws["A1"].alignment = center
+
+                    # Pequeña descripción
+                    ws["A3"] = "El resultado del inventario rotativo es el siguiente:"
+
+                    # Encabezados de la tabla
+                    start_row = 5
+                    ws["A{}".format(start_row)] = "Detalle"
+                    ws["B{}".format(start_row)] = "Cant. de Art."
+                    ws["C{}".format(start_row)] = "$"
+                    ws["D{}".format(start_row)] = "%"
+                    for col in ["A", "B", "C", "D"]:
+                        cell = ws[f"{col}{start_row}"]
+                        cell.font = bold
+                        cell.alignment = center
+                        cell.border = border
+
+                    # Filas de datos
+                    rows = [
+                        ("Muestra", muestra_cnt, valor_muestra, 1.0),
+                        ("Faltantes", int(dfr.loc[dif < 0, "_stock_num"].sum()) if "_stock_num" in dfr else int(faltantes), value_faltantes, (value_faltantes / valor_muestra) if valor_muestra else 0),
+                        ("Sobrantes", int(dfr.loc[dif > 0, "_stock_num"].sum()) if "_stock_num" in dfr else int(sobrantes), value_sobrantes, (value_sobrantes / valor_muestra) if valor_muestra else 0),
+                        ("Diferencia Neta", int(neta), value_neta, (value_neta / valor_muestra) if valor_muestra else 0),
+                        ("Diferencia Absoluta", int(absoluta), value_absoluta, (value_absoluta / valor_muestra) if valor_muestra else 0),
+                    ]
+
+                    for i, r in enumerate(rows, start=start_row + 1):
+                        ws[f"A{i}"] = r[0]
+                        ws[f"B{i}"] = r[1]
+                        ws[f"C{i}"] = r[2]
+                        ws[f"D{i}"] = r[3]
+                        ws[f"B{i}"].alignment = center
+                        ws[f"C{i}"].number_format = money_fmt
+                        ws[f"D{i}"].number_format = "0.00%"
+                        ws[f"A{i}"].border = border
+                        ws[f"B{i}"].border = border
+                        ws[f"C{i}"].border = border
+                        ws[f"D{i}"].border = border
+
+                    # Resaltar Diferencia Neta y Absoluta
+                    diff_rows = [start_row + 3, start_row + 4]
+                    for r in diff_rows:
+                        for col in ["B", "C", "D"]:
+                            ws[f"{col}{r}"].fill = light_red
+
+                    # Mostrar porcentaje de cumplimiento y caja
+                    pct_cell_row = start_row + 1
+                    ws.merge_cells(f"F{pct_cell_row}:G{pct_cell_row}")
+                    ws[f"F{pct_cell_row}"] = f"{grado}%"
+                    ws[f"F{pct_cell_row}"].font = Font(size=12, bold=True)
+                    ws[f"F{pct_cell_row}"].alignment = center
+
+                    # Tabla de escala
+                    escala_start = start_row + 7
+                    ws[f"B{escala_start}"] = "Dif. Abs. desde"
+                    ws[f"C{escala_start}"] = "Grado de cumplim."
+                    ws[f"B{escala_start}"].font = bold
+                    ws[f"C{escala_start}"].font = bold
+
+                    for j, (th, g) in enumerate(escala_sorted, start=escala_start + 1):
+                        ws[f"B{j}"] = f"{th:.2f}%"
+                        ws[f"C{j}"] = f"{g}%"
+                        ws[f"B{j}"].alignment = center
+                        ws[f"C{j}"].alignment = center
+
+                    # Hoja detalle
+                    ws2 = wb.create_sheet(title="Detalle")
+                    for r in dataframe_to_rows(df_det, index=False, header=True):
+                        ws2.append(r)
+
+                    # Ajustes de ancho
+                    for column_cells in ws.columns:
+                        try:
+                            length = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+                            col_letter = column_cells[0].column_letter
+                            ws.column_dimensions[col_letter].width = min(40, length + 4)
+                        except:
+                            pass
+
+                    wb.save(buffer)
                     buffer.seek(0)
                     return buffer
 
