@@ -6,6 +6,7 @@ import io
 import bcrypt
 from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 
+# Version: 2.1 - Fixed Google Sheets connection
 
 # ----------------------------
 # CONFIG
