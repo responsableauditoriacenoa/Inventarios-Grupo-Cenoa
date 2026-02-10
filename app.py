@@ -104,7 +104,7 @@ def login():
     col1, col2 = st.columns([1, 4])
     with col1:
         try:
-            st.image("assets/logo_grupo_cenoa.png", width=100)
+                st.image("assets/logo_grupo_cenoa.png", width=100)
         except:
             st.write("🏢 **GRUPO CENOA**")
     
@@ -498,7 +498,7 @@ with tab3:
                         val_actual = row.get("Justif_Validada", "")
                         
                         st.write(f"**{art} ({loc})**")
-                        st.write(f"*{just if just else '(sin justificación)*"}
+                        st.write(f"*{just if just else '(sin justificación)'}*")
                         
                         val = st.selectbox(
                             "¿Validada?",
