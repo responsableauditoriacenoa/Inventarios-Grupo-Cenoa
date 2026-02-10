@@ -13,6 +13,9 @@ from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wide", page_icon="📦")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# Obtener ID del spreadsheet desde secrets
+SPREADSHEET_KEY = st.secrets["connections"]["gsheets"]["spreadsheet_key"]
+
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
 
@@ -39,13 +42,13 @@ def _read_ws(ws: str) -> pd.DataFrame:
     ttl=0 fuerza lectura directa a Google Sheets (sin caché),
     así Tab 3 siempre ve las diferencias recién guardadas.
     """
-    df = conn.read(worksheet=ws, ttl=0)
+    df = conn.read(spreadsheet=SPREADSHEET_KEY, worksheet=ws, ttl=0)
     if df is None:
         return pd.DataFrame()
     return df
 
 def _update_ws(ws: str, df: pd.DataFrame):
-    conn.update(worksheet=ws, data=df)
+    conn.update(spreadsheet=SPREADSHEET_KEY, worksheet=ws, data=df)
 
 def _append_df(ws: str, df_nuevo: pd.DataFrame):
     """Append emulado: read + concat + update"""
