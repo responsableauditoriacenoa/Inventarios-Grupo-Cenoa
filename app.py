@@ -1,12 +1,13 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+import gspread
 import datetime
 import io
 import bcrypt
 from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 
-# Version: 2.1 - Fixed Google Sheets connection
+# Version: 2.2 - Using gspread directly
 
 # ----------------------------
 # CONFIG
@@ -14,8 +15,11 @@ from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wide", page_icon="📦")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Nombre del spreadsheet (usar el nombre exacto del archivo en Google Sheets)
-SPREADSHEET_NAME = "Inventarios Grupo Cenoa"
+# Obtener cliente gspread
+client = conn.client
+
+# ID del spreadsheet
+SPREADSHEET_ID = "1Dwn-uXcsT8CKFKwL0kZ4WyeVSwOGzXGcxMTW1W1bTe4"
 
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
@@ -40,16 +44,34 @@ CONCESIONARIAS = {
 # ----------------------------
 def _read_ws(ws: str) -> pd.DataFrame:
     """
-    ttl=0 fuerza lectura directa a Google Sheets (sin caché),
-    así Tab 3 siempre ve las diferencias recién guardadas.
+    Lee una worksheet usando gspread y la convierte a DataFrame
     """
-    df = conn.read(spreadsheet=SPREADSHEET_NAME, worksheet=ws, ttl=0)
-    if df is None:
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        worksheet = spreadsheet.worksheet(ws)
+        data = worksheet.get_all_records()
+        if not data:
+            return pd.DataFrame()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error al leer {ws}: {str(e)}")
         return pd.DataFrame()
-    return df
 
 def _update_ws(ws: str, df: pd.DataFrame):
-    conn.update(spreadsheet=SPREADSHEET_NAME, worksheet=ws, data=df)
+    """
+    Actualiza una worksheet con los datos de un DataFrame
+    """
+    try:
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        worksheet = spreadsheet.worksheet(ws)
+        
+        # Limpiar la worksheet
+        worksheet.clear()
+        
+        # Escribir datos
+        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+    except Exception as e:
+        st.error(f"Error al actualizar {ws}: {str(e)}")
 
 def _append_df(ws: str, df_nuevo: pd.DataFrame):
     """Append emulado: read + concat + update"""
