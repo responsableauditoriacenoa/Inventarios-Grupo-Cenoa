@@ -1,32 +1,32 @@
 """
 Configuración de usuarios y contraseñas para la app
 """
-import hashlib
+import bcrypt
 
 # Diccionario con usuarios, contraseñas (hasheadas en bcrypt), y roles
 USUARIOS_CREDENCIALES = {
     "diego_guantay": {
-        "password_hash": "$2b$12$K1mW7QqHZq8P5yL9.zX5a.L8N2e4K5Q9X3c7Z8B1M4D6F9H2J5L8N",  # Password: DieguG123!
+        "password_hash": "$2b$12$AJBD2HZ7croVlJikPmhxhewMTdKAU6ZjrfBgamAHX0rbHnUcVz4Aq",
         "rol": "Auditor",
         "nombre": "Diego Guantay"
     },
     "nancy_fernandez": {
-        "password_hash": "$2b$12$N5mW9QqHZq8P5yL9.zX5a.L8N2e4K5Q9X3c7Z8B1M4D6F9H2J5L8N",  # Password: NancyF123!
+        "password_hash": "$2b$12$PcQDPif08S3vGh2ndyS9reCPyHVJKXldBAcbKf4YoWMCAcN4dugG2",
         "rol": "Auditor",
         "nombre": "Nancy Fernandez"
     },
     "gustavo_zambrano": {
-        "password_hash": "$2b$12$G8mW3QqHZq8P5yL9.zX5a.L8N2e4K5Q9X3c7Z8B1M4D6F9H2J5L8N",  # Password: GustavoZ123!
+        "password_hash": "$2b$12$kMt84HgobeYfcU2FlENFue8BEnd5hRMX6m3sGuj.3ihiUqigfZF72",
         "rol": "Auditor",
         "nombre": "Gustavo Zambrano"
     },
     "admin": {
-        "password_hash": "$2b$12$A1mW6QqHZq8P5yL9.zX5a.L8N2e4K5Q9X3c7Z8B1M4D6F9H2J5L8N",  # Password: Admin123!
+        "password_hash": "$2b$12$aMJ7dG7Vqd5wq3p9oUsTCu/ahd/QVO9WcW3TZ46Z/r1i3u6k2M2AS",
         "rol": "Auditor",
         "nombre": "Admin"
     },
     "jefe_repuestos": {
-        "password_hash": "$2b$12$J4mW2QqHZq8P5yL9.zX5a.L8N2e4K5Q9X3c7Z8B1M4D6F9H2J5L8N",  # Password: JefeRep123!
+        "password_hash": "$2b$12$sqFCkPlt6rTRLuggPQ9GA.42FJ0kgb3wniyhTCYv5kCg/TXv3Z5x2",
         "rol": "Deposito",
         "nombre": "Jefe de Repuestos"
     }
