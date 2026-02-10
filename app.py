@@ -155,9 +155,83 @@ def listar_inventarios_abiertos():
 
 def cargar_detalle(id_inv: str) -> pd.DataFrame:
     df = _read_ws(SHEET_DET)
-    if df.empty or "ID_Inventario" not in df.columns:
+    if df.empty or "ID_Inventario" not in df_columns:
         return pd.DataFrame()
     return df[df["ID_Inventario"].astype(str) == str(id_inv)].copy()
+
+def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
+    """
+    Calcula los resultados del inventario desde el detalle.
+    Retorna dict con: cantidad_muestra, valor_muestra, 
+    cantidad_faltantes, valor_faltantes,
+    cantidad_sobrantes, valor_sobrantes,
+    cantidad_dif_neta, valor_dif_neta,
+    cantidad_dif_absoluta, valor_dif_absoluta,
+    pct_absoluto, grado
+    """
+    if df_det.empty:
+        return {}
+    
+    # Convertir a números
+    df_r = df_det.copy()
+    stock_col = C_STOCK if C_STOCK in df_r.columns else None
+    costo_col = C_COSTO if C_COSTO in df_r.columns else None
+    dif_col = "Diferencia"
+    
+    if not stock_col or not costo_col or dif_col not in df_r.columns:
+        return {}
+    
+    df_r["_stock"] = pd.to_numeric(df_r[stock_col], errors="coerce").fillna(0)
+    df_r["_costo"] = pd.to_numeric(df_r[costo_col], errors="coerce").fillna(0)
+    df_r["_dif"] = pd.to_numeric(df_r[dif_col], errors="coerce").fillna(0)
+    
+    # Muestra
+    cant_muestra = int(df_r["_stock"].sum())
+    valor_muestra = (df_r["_stock"] * df_r["_costo"]).sum()
+    
+    # Faltantes (Diferencia < 0)
+    mask_falt = df_r["_dif"] < 0
+    cant_faltantes = int((df_r.loc[mask_falt, "_dif"].abs()).sum())
+    valor_faltantes = (df_r.loc[mask_falt, "_dif"].abs() * df_r.loc[mask_falt, "_costo"]).sum()
+    
+    # Sobrantes (Diferencia > 0)
+    mask_sobr = df_r["_dif"] > 0
+    cant_sobrantes = int(df_r.loc[mask_sobr, "_dif"].sum())
+    valor_sobrantes = (df_r.loc[mask_sobr, "_dif"] * df_r.loc[mask_sobr, "_costo"]).sum()
+    
+    # Diferencia neta (suma algebraica)
+    cant_dif_neta = int(df_r["_dif"].sum())
+    valor_dif_neta = (df_r["_dif"] * df_r["_costo"]).sum()
+    
+    # Diferencia absoluta (suma de valores absolutos)
+    cant_dif_absoluta = int(df_r["_dif"].abs().sum())
+    valor_dif_absoluta = (df_r["_dif"].abs() * df_r["_costo"]).sum()
+    
+    # Porcentaje absoluto y grado de cumplimiento
+    pct_absoluto = (valor_dif_absoluta / valor_muestra * 100) if valor_muestra else 0
+    
+    escala = [(0.00, 100), (0.10, 94), (0.80, 82), (1.60, 65), (2.40, 35), (3.30, 0)]
+    escala_sorted = sorted(escala, key=lambda x: x[0])
+    grado = 0
+    for th, g in escala_sorted:
+        if pct_absoluto >= th:
+            grado = g
+    
+    return {
+        "cant_muestra": cant_muestra,
+        "valor_muestra": valor_muestra,
+        "cant_faltantes": cant_faltantes,
+        "valor_faltantes": valor_faltantes,
+        "cant_sobrantes": cant_sobrantes,
+        "valor_sobrantes": valor_sobrantes,
+        "cant_dif_neta": cant_dif_neta,
+        "valor_dif_neta": valor_dif_neta,
+        "cant_dif_absoluta": cant_dif_absoluta,
+        "valor_dif_absoluta": valor_dif_absoluta,
+        "pct_absoluto": pct_absoluto,
+        "grado": grado,
+        "escala": escala_sorted
+    }
 
 def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
     """Reemplaza solo las filas de ese inventario dentro del Detalle_Articulos."""
@@ -516,19 +590,66 @@ with tab4:
             if df_det.empty:
                 st.warning("No hay detalle para ese inventario.")
             else:
+                # Calcular resultados desde el inventario
+                resultados = calcular_resultados_inventario(df_det)
+                
+                if not resultados:
+                    st.error("No se pudieron calcular los resultados. Verifica las columnas del inventario.")
+                    st.stop()
+                
+                # Mostrar preview visual de los resultados
+                st.write("### 📊 Paneo Visual de Resultados")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Muestra (Qty)", resultados["cant_muestra"])
+                col2.metric("Faltantes (Qty)", resultados["cant_faltantes"])
+                col3.metric("Sobrantes (Qty)", resultados["cant_sobrantes"])
+                col4.metric("Grado de Cumplimiento", f"{resultados['grado']}%")
+                
+                # Tabla de resultados
+                st.write("### 📋 Tabla Detallada")
+                tabla_resultados = pd.DataFrame([
+                    {
+                        "Detalle": "Muestra",
+                        "Cant. de Art.": resultados["cant_muestra"],
+                        "$": resultados["valor_muestra"],
+                        "%": 1.0
+                    },
+                    {
+                        "Detalle": "Faltantes",
+                        "Cant. de Art.": resultados["cant_faltantes"],
+                        "$": resultados["valor_faltantes"],
+                        "%": resultados["valor_faltantes"] / resultados["valor_muestra"] if resultados["valor_muestra"] else 0
+                    },
+                    {
+                        "Detalle": "Sobrantes",
+                        "Cant. de Art.": resultados["cant_sobrantes"],
+                        "$": resultados["valor_sobrantes"],
+                        "%": resultados["valor_sobrantes"] / resultados["valor_muestra"] if resultados["valor_muestra"] else 0
+                    },
+                    {
+                        "Detalle": "Diferencia Neta",
+                        "Cant. de Art.": resultados["cant_dif_neta"],
+                        "$": resultados["valor_dif_neta"],
+                        "%": resultados["valor_dif_neta"] / resultados["valor_muestra"] if resultados["valor_muestra"] else 0
+                    },
+                    {
+                        "Detalle": "Diferencia Absoluta",
+                        "Cant. de Art.": resultados["cant_dif_absoluta"],
+                        "$": resultados["valor_dif_absoluta"],
+                        "%": resultados["valor_dif_absoluta"] / resultados["valor_muestra"] if resultados["valor_muestra"] else 0
+                    }
+                ])
+                
+                # Formatear la tabla para mostrar
+                tabla_display = tabla_resultados.copy()
+                tabla_display["$"] = tabla_display["$"].apply(lambda x: f"${x:,.2f}")
+                tabla_display["%"] = tabla_display["%"].apply(lambda x: f"{x*100:.2f}%")
+                
+                st.dataframe(tabla_display, use_container_width=True, hide_index=True)
+                
+                # Validación
                 dif = pd.to_numeric(df_det.get("Diferencia", 0), errors="coerce").fillna(0)
-
-                faltantes = dif[dif < 0].sum()
-                sobrantes = dif[dif > 0].sum()
-                neta = dif.sum()
-                absoluta = dif.abs().sum()
-
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Faltantes (sum)", f"{faltantes:,.2f}")
-                c2.metric("Sobrantes (sum)", f"{sobrantes:,.2f}")
-                c3.metric("Diferencia neta", f"{neta:,.2f}")
-                c4.metric("Diferencia absoluta", f"{absoluta:,.2f}")
-
                 difmask = dif != 0
                 val = df_det.get("Justif_Validada", "").astype(str)
                 ok_validacion = bool(((~difmask) | (val.str.strip() != "")).all())
@@ -537,56 +658,41 @@ with tab4:
                     st.warning("⚠️ Hay diferencias sin validar (Justif_Validada vacío).")
 
                 st.divider()
-                st.write("Descargar reporte (.xlsx):")
+                st.write("### 📥 Descargar reporte (.xlsx):")
 
                 def build_report_xlsx():
                     from openpyxl import Workbook
                     from openpyxl.utils.dataframe import dataframe_to_rows
-                    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, numbers
+                    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
                     buffer = io.BytesIO()
+                    
+                    # Usar los valores calculados
+                    muestra_cnt = resultados["cant_muestra"]
+                    valor_muestra = resultados["valor_muestra"]
+                    cant_faltantes = resultados["cant_faltantes"]
+                    value_faltantes = resultados["valor_faltantes"]
+                    cant_sobrantes = resultados["cant_sobrantes"]
+                    value_sobrantes = resultados["valor_sobrantes"]
+                    cant_dif_neta = resultados["cant_dif_neta"]
+                    value_neta = resultados["valor_dif_neta"]
+                    cant_dif_absoluta = resultados["cant_dif_absoluta"]
+                    value_absoluta = resultados["valor_dif_absoluta"]
+                    pct_absoluto = resultados["pct_absoluto"]
+                    grado = resultados["grado"]
+                    escala_sorted = resultados["escala"]
 
-                    # Preparar datos numéricos
-                    dfr = df_det.copy()
-                    stock_col = C_STOCK if C_STOCK in dfr.columns else None
-                    costo_col = C_COSTO if C_COSTO in dfr.columns else None
-                    dfr["_stock_num"] = pd.to_numeric(dfr.get(stock_col, 0), errors="coerce").fillna(0)
-                    dfr["_costo_num"] = pd.to_numeric(dfr.get(costo_col, 0), errors="coerce").fillna(0)
-                    dif = pd.to_numeric(dfr.get("Diferencia", 0), errors="coerce").fillna(0)
-
-                    muestra_cnt = int(dfr["_stock_num"].sum())
-                    valor_muestra = (dfr["_stock_num"] * dfr["_costo_num"]).sum()
-
-                    # Valores monetarios de faltantes/sobrantes
-                    value_faltantes = ((-dif[dif < 0]) * dfr.loc[dif < 0, "_costo_num"]).sum()
-                    value_sobrantes = ((dif[dif > 0]) * dfr.loc[dif > 0, "_costo_num"]).sum()
-                    value_neta = (dif * dfr["_costo_num"]).sum()
-                    value_absoluta = (dif.abs() * dfr["_costo_num"]).sum()
-
-                    # Porcentaje absoluto respecto a la muestra (evitar div0)
-                    pct_absoluto = (abs(value_neta) / valor_muestra * 100) if valor_muestra else 0
-
-                    # Escala de cumplimiento (umbral, grado)
-                    escala = [(0.00, 100), (0.10, 94), (0.80, 82), (1.60, 65), (2.40, 35), (3.30, 0)]
-                    escala_sorted = sorted(escala, key=lambda x: x[0])
-                    grado = 0
-                    for th, g in escala_sorted:
-                        if pct_absoluto >= th:
-                            grado = g
-
-                    # Crear workbook y hojas
+                    # Crear workbook
                     wb = Workbook()
                     ws = wb.active
                     ws.title = "Resultado"
 
                     # Estilos
                     title_font = Font(size=14, bold=True)
-                    header_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
                     light_red = PatternFill(start_color="FFF2F2", end_color="FFF2F2", fill_type="solid")
                     bold = Font(bold=True)
                     center = Alignment(horizontal="center", vertical="center")
-                    money_fmt = "#,##0.00"  # currency without symbol; Excel may use locale
-                    pct_fmt = "0.00%"
+                    money_fmt = "#,##0.00"
                     thin = Side(border_style="thin", color="000000")
                     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -596,16 +702,16 @@ with tab4:
                     ws["A1"].font = title_font
                     ws["A1"].alignment = center
 
-                    # Pequeña descripción
+                    # Descripción
                     ws["A3"] = "El resultado del inventario rotativo es el siguiente:"
 
-                    # Encabezados de la tabla
+                    # Encabezados
                     start_row = 5
-                    ws["A{}".format(start_row)] = "Detalle"
-                    ws["B{}".format(start_row)] = "Cant. de Art."
-                    ws["C{}".format(start_row)] = "$"
-                    ws["D{}".format(start_row)] = "%"
-                    for col in ["A", "B", "C", "D"]:
+                    ws[f"A{start_row}"] = "Detalle"
+                    ws[f"B{start_row}"] = "Cant. de Art."
+                    ws[f"C{start_row}"] = "$"
+                    ws[f"D{start_row}"] = "%"
+                    for col in ["A","B","C","D"]:
                         cell = ws[f"{col}{start_row}"]
                         cell.font = bold
                         cell.alignment = center
@@ -614,10 +720,10 @@ with tab4:
                     # Filas de datos
                     rows = [
                         ("Muestra", muestra_cnt, valor_muestra, 1.0),
-                        ("Faltantes", int(dfr.loc[dif < 0, "_stock_num"].sum()) if "_stock_num" in dfr else int(faltantes), value_faltantes, (value_faltantes / valor_muestra) if valor_muestra else 0),
-                        ("Sobrantes", int(dfr.loc[dif > 0, "_stock_num"].sum()) if "_stock_num" in dfr else int(sobrantes), value_sobrantes, (value_sobrantes / valor_muestra) if valor_muestra else 0),
-                        ("Diferencia Neta", int(neta), value_neta, (value_neta / valor_muestra) if valor_muestra else 0),
-                        ("Diferencia Absoluta", int(absoluta), value_absoluta, (value_absoluta / valor_muestra) if valor_muestra else 0),
+                        ("Faltantes", cant_faltantes, value_faltantes, (value_faltantes / valor_muestra) if valor_muestra else 0),
+                        ("Sobrantes", cant_sobrantes, value_sobrantes, (value_sobrantes / valor_muestra) if valor_muestra else 0),
+                        ("Diferencia Neta", cant_dif_neta, value_neta, (value_neta / valor_muestra) if valor_muestra else 0),
+                        ("Diferencia Absoluta", cant_dif_absoluta, value_absoluta, (value_absoluta / valor_muestra) if valor_muestra else 0),
                     ]
 
                     for i, r in enumerate(rows, start=start_row + 1):
@@ -636,10 +742,10 @@ with tab4:
                     # Resaltar Diferencia Neta y Absoluta
                     diff_rows = [start_row + 3, start_row + 4]
                     for r in diff_rows:
-                        for col in ["B", "C", "D"]:
+                        for col in ["B","C","D"]:
                             ws[f"{col}{r}"].fill = light_red
 
-                    # Mostrar porcentaje de cumplimiento y caja
+                    # Grado de cumplimiento
                     pct_cell_row = start_row + 1
                     ws.merge_cells(f"F{pct_cell_row}:G{pct_cell_row}")
                     ws[f"F{pct_cell_row}"] = f"{grado}%"
@@ -690,5 +796,6 @@ with tab4:
                     cerrar_inventario(id_sel, usuario_actual)
                     st.success("Inventario cerrado en Historial_Inventarios.")
                     st.rerun()
+
 
 
