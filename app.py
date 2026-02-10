@@ -3,6 +3,9 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 import datetime
 import io
+import bcrypt
+from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
+
 
 # ----------------------------
 # CONFIG
@@ -32,7 +35,11 @@ CONCESIONARIAS = {
 # HELPERS GSHEETS
 # ----------------------------
 def _read_ws(ws: str) -> pd.DataFrame:
-    df = conn.read(worksheet=ws)
+    """
+    ttl=0 fuerza lectura directa a Google Sheets (sin caché),
+    así Tab 3 siempre ve las diferencias recién guardadas.
+    """
+    df = conn.read(worksheet=ws, ttl=0)
     if df is None:
         return pd.DataFrame()
     return df
@@ -61,23 +68,81 @@ def _append_df(ws: str, df_nuevo: pd.DataFrame):
     _update_ws(ws, df_final)
 
 # ----------------------------
-# AUTH SIMPLE
+# AUTH CON USUARIO Y CONTRASEÑA
 # ----------------------------
-USUARIOS = ["Seleccionar", "Diego Guantay", "Nancy Fernandez", "Gustavo Zambrano", "Admin", "Jefe de Repuestos"]
+def verificar_password(password: str, password_hash: str) -> bool:
+    """Verifica la contraseña contra el hash bcrypt"""
+    return bcrypt.checkpw(password.encode(), password_hash.encode())
 
 def login():
-    with st.sidebar:
-        st.title("🔐 Acceso")
-        user = st.selectbox("Usuario", USUARIOS)
-        if user == "Seleccionar":
-            return None, None
-        rol = "Deposito" if user == "Jefe de Repuestos" else "Auditor"
-        return user, rol
+    """Sistema de login con usuario y contraseña"""
+    # Mostrar logo en la parte superior
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        try:
+            st.image("assets/logo_grupo_cenoa.png", width=100)
+        except:
+            # Si no existe la imagen local, mostrar un placeholder
+            st.write("🏢 **GRUPO CENOA**")
+    
+    with col2:
+        st.write("")  # Espacios en blanco
+    
+    st.title("🔐 Inventarios Rotativos - Grupo Cenoa")
+    
+    with st.form("login_form"):
+        usuario = st.text_input("Usuario (ID):", placeholder="Ej: diego_guantay")
+        contrasena = st.text_input("Contraseña:", type="password")
+        submit = st.form_submit_button("Ingresar", use_container_width=True)
+        
+        if submit:
+            if usuario in USUARIOS_CREDENCIALES:
+                creds = USUARIOS_CREDENCIALES[usuario]
+                # Verificar contraseña
+                if verificar_password(contrasena, creds["password_hash"]):
+                    st.session_state["logged_in"] = True
+                    st.session_state["usuario"] = usuario
+                    st.session_state["nombre_usuario"] = creds["nombre"]
+                    st.session_state["rol"] = creds["rol"]
+                    st.success(f"✅ Bienvenido {creds['nombre']}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Contraseña incorrecta")
+            else:
+                st.error("❌ Usuario no encontrado")
+    
+    # Mostrar tabla de credenciales (solo para pruebas - ELIMINAR EN PRODUCCIÓN)
+    st.divider()
+    st.write("**📋 CREDENCIALES DE PRUEBA** (Eliminar después de la primera vez)")
+    
+    creds_data = []
+    for user_id, password in CREDENCIALES_INICIALES.items():
+        rol = USUARIOS_CREDENCIALES[user_id]["rol"]
+        nombre = USUARIOS_CREDENCIALES[user_id]["nombre"]
+        creds_data.append({
+            "Usuario (ID)": user_id,
+            "Contraseña": password,
+            "Rol": rol,
+            "Nombre": nombre
+        })
+    
+    df_creds = pd.DataFrame(creds_data)
+    st.dataframe(df_creds, use_container_width=True, hide_index=True)
+    st.info("⚠️ Estas credenciales son para pruebas. Cámbialas en producción.")
+    
+    return None, None
 
-usuario_actual, rol_actual = login()
-if not usuario_actual:
-    st.info("Seleccioná tu usuario para comenzar.")
+# Verificar si está logueado
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    login()
     st.stop()
+
+usuario_actual = st.session_state.get("usuario")
+nombre_actual = st.session_state.get("nombre_usuario")
+rol_actual = st.session_state.get("rol")
 
 # ----------------------------
 # DATA ACCESS
@@ -123,6 +188,17 @@ def cerrar_inventario(id_inv: str, usuario: str):
 # ----------------------------
 # UI
 # ----------------------------
+# Sidebar con info de usuario y logout
+with st.sidebar:
+    st.write("---")
+    st.write(f"**👤 Logueado como:** {nombre_actual}")
+    st.write(f"**🎯 Rol:** {rol_actual}")
+    
+    if st.button("🚪 Cerrar sesión", use_container_width=True):
+        st.session_state["logged_in"] = False
+        st.session_state.clear()
+        st.rerun()
+
 st.title("📦 Inventarios Rotativos - Auditoría Interna (Grupo Cenoa)")
 
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -154,14 +230,12 @@ with tab1:
         archivo = st.file_uploader("Subir reporte de stock (.xlsx)", type=["xlsx"])
 
         if archivo:
-            # Tu archivo viene con headers en la primera fila, así que lo leemos directo
             df_base = pd.read_excel(archivo)
 
             st.write("Vista previa del reporte:")
             st.dataframe(df_base.head(15), use_container_width=True)
 
             if st.button("✅ Generar y guardar inventario"):
-                # Validación de columnas mínimas
                 falt = [c for c in [C_ART, C_LOC, C_DESC, C_STOCK, C_COSTO] if c not in df_base.columns]
                 if falt:
                     st.error(f"Faltan columnas en el Excel: {', '.join(falt)}")
@@ -181,7 +255,6 @@ with tab1:
                 df["Acc"] = df["Valor_T"].cumsum() / total
                 df["Cat"] = df["Acc"].apply(lambda x: "A" if x <= 0.8 else ("B" if x <= 0.95 else "C"))
 
-                # Muestra 80 / 15 / 5
                 df_a = df[df["Cat"] == "A"]
                 df_b = df[df["Cat"] == "B"]
                 df_c = df[df["Cat"] == "C"]
@@ -192,7 +265,6 @@ with tab1:
 
                 muestra = pd.concat([m_a, m_b, m_c], ignore_index=True)
 
-                # Campos del circuito
                 muestra["Concesionaria"] = concesionaria
                 muestra["Sucursal"] = sucursal
                 muestra["Conteo_Fisico"] = ""
@@ -204,7 +276,6 @@ with tab1:
 
                 id_inv = datetime.datetime.now().strftime("INV-%Y%m%d-%H%M")
 
-                # Guardar historial (anti-duplicado por rerun)
                 df_hist = _read_ws(SHEET_HIST)
                 if not df_hist.empty and "ID_Inventario" in df_hist.columns:
                     if (df_hist["ID_Inventario"].astype(str) == id_inv).any():
@@ -223,13 +294,15 @@ with tab1:
                 }])
                 _append_df(SHEET_HIST, nueva_fila)
 
-                # Guardar detalle
                 muestra["ID_Inventario"] = id_inv
                 _append_df(SHEET_DET, muestra)
 
                 st.success(f"✅ Inventario {id_inv} creado y guardado.")
                 st.session_state["id_inv"] = id_inv
                 st.dataframe(muestra[[C_LOC, C_ART, C_DESC, "Cat"]], use_container_width=True)
+
+                # Forzar refresco general
+                st.rerun()
 
 # ----------------------------
 # TAB 2: CONTEO (AUDITOR)
@@ -295,11 +368,17 @@ with tab2:
                     guardar_detalle_modificado(id_sel, df_merge)
                     st.success("✅ Conteo guardado y diferencias recalculadas.")
 
+                    # CLAVE: forzar refresco para que Tab 3 lea las diferencias
+                    st.rerun()
+
 # ----------------------------
 # TAB 3: JUSTIFICACIONES (DEPÓSITO + VALIDACIÓN AUDITOR)
 # ----------------------------
 with tab3:
     st.subheader("Justificaciones y validación")
+
+    if st.button("🔄 Refrescar diferencias"):
+        st.rerun()
 
     df_abiertos = listar_inventarios_abiertos()
     if df_abiertos.empty:
@@ -315,7 +394,7 @@ with tab3:
             df_dif = df_det.loc[dif_num != 0].copy()
 
             if df_dif.empty:
-                st.success("No hay diferencias para justificar.")
+                st.success("No hay diferencias para justificar (o todavía no guardaste conteo).")
             else:
                 base_cols = ["Concesionaria","Sucursal",C_LOC,C_ART,C_DESC,C_STOCK,"Conteo_Fisico","Diferencia","Justificacion","Justif_Validada"]
                 base_cols = [c for c in base_cols if c in df_dif.columns]
@@ -323,67 +402,100 @@ with tab3:
 
                 if rol_actual == "Deposito":
                     st.caption("Depósito: completá Justificacion y guardá.")
-                    edited = st.data_editor(
-                        df_view,
-                        use_container_width=True,
-                        num_rows="fixed",
-                        disabled=[c for c in df_view.columns if c != "Justificacion"],
-                        key=f"dep_{id_sel}"
-                    )
+                    
+                    # Mostrar tabla sin editar, con columnas de entrada separadas
+                    display_cols = [c for c in base_cols if c != "Justificacion"]
+                    st.dataframe(df_view[display_cols], use_container_width=True, hide_index=True)
+                    
+                    st.write("**Ingresá las justificaciones:**")
+                    justificaciones_dict = {}
+                    
+                    for idx, row in df_view.iterrows():
+                        col_key = f"{row[C_ART]}_{row[C_LOC]}"
+                        art = row[C_ART]
+                        loc = row[C_LOC]
+                        dif = row["Diferencia"]
+                        just_actual = row.get("Justificacion", "")
+                        
+                        st.write(f"**{art} ({loc}) - Diferencia: {dif}**")
+                        justificacion = st.text_area(
+                            f"Justificación",
+                            value=just_actual,
+                            height=80,
+                            key=f"just_{col_key}"
+                        )
+                        justificaciones_dict[col_key] = {
+                            "Articulo": art,
+                            "Locacion": loc,
+                            "Justificacion": justificacion
+                        }
+                        st.divider()
+                    
                     if st.button("💾 Guardar justificaciones (Depósito)"):
                         df_det2 = df_det.copy()
-
-                        key_cols = [C_ART, C_LOC]
-                        edited2 = edited.copy()
-                        for c in key_cols:
-                            edited2[c] = edited2[c].astype(str)
-                            df_det2[c] = df_det2[c].astype(str)
-
-                        df_merge = df_det2.merge(
-                            edited2[key_cols + ["Justificacion"]],
-                            on=key_cols,
-                            how="left",
-                            suffixes=("", "_new")
-                        )
-                        df_merge["Justificacion"] = df_merge["Justificacion_new"].combine_first(df_merge.get("Justificacion"))
-                        if "Justificacion_new" in df_merge.columns:
-                            df_merge = df_merge.drop(columns=["Justificacion_new"])
-
-                        guardar_detalle_modificado(id_sel, df_merge)
+                        
+                        for col_key, data in justificaciones_dict.items():
+                            art = data["Articulo"]
+                            loc = data["Locacion"]
+                            just = data["Justificacion"]
+                            
+                            mask = (df_det2[C_ART].astype(str) == str(art)) & (df_det2[C_LOC].astype(str) == str(loc))
+                            df_det2.loc[mask, "Justificacion"] = just
+                        
+                        guardar_detalle_modificado(id_sel, df_det2)
                         st.success("✅ Justificaciones guardadas.")
+                        st.rerun()
+
                 else:
                     st.caption("Auditor: marcá Justif_Validada (SI/NO) y guardá.")
-                    edited = st.data_editor(
-                        df_view,
-                        use_container_width=True,
-                        num_rows="fixed",
-                        disabled=[c for c in df_view.columns if c != "Justif_Validada"],
-                        key=f"audit_{id_sel}"
-                    )
+                    
+                    # Mostrar tabla sin editar, con columnas de entrada separadas
+                    display_cols = [c for c in base_cols if c != "Justif_Validada"]
+                    st.dataframe(df_view[display_cols], use_container_width=True, hide_index=True)
+                    
+                    st.write("**Validá las justificaciones:**")
+                    validaciones_dict = {}
+                    
+                    for idx, row in df_view.iterrows():
+                        col_key = f"{row[C_ART]}_{row[C_LOC]}"
+                        art = row[C_ART]
+                        loc = row[C_LOC]
+                        dif = row["Diferencia"]
+                        just = row.get("Justificacion", "")
+                        val_actual = row.get("Justif_Validada", "")
+                        
+                        st.write(f"**{art} ({loc}) - Diferencia: {dif}**")
+                        st.write(f"*Justificación: {just if just else '(sin justificación)'}*")
+                        
+                        validacion = st.selectbox(
+                            "¿Está validada?",
+                            options=["", "SI", "NO"],
+                            index=(["", "SI", "NO"].index(val_actual) if val_actual in ["SI", "NO"] else 0),
+                            key=f"val_{col_key}"
+                        )
+                        validaciones_dict[col_key] = {
+                            "Articulo": art,
+                            "Locacion": loc,
+                            "Justif_Validada": validacion
+                        }
+                        st.divider()
+                    
                     if st.button("💾 Guardar validación (Auditor)"):
                         df_det2 = df_det.copy()
-
-                        key_cols = [C_ART, C_LOC]
-                        edited2 = edited.copy()
-                        for c in key_cols:
-                            edited2[c] = edited2[c].astype(str)
-                            df_det2[c] = df_det2[c].astype(str)
-
-                        df_merge = df_det2.merge(
-                            edited2[key_cols + ["Justif_Validada"]],
-                            on=key_cols,
-                            how="left",
-                            suffixes=("", "_new")
-                        )
-                        df_merge["Justif_Validada"] = df_merge["Justif_Validada_new"].combine_first(df_merge.get("Justif_Validada"))
-                        df_merge["Validador"] = usuario_actual
-                        df_merge["Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-                        if "Justif_Validada_new" in df_merge.columns:
-                            df_merge = df_merge.drop(columns=["Justif_Validada_new"])
-
-                        guardar_detalle_modificado(id_sel, df_merge)
+                        
+                        for col_key, data in validaciones_dict.items():
+                            art = data["Articulo"]
+                            loc = data["Locacion"]
+                            val = data["Justif_Validada"]
+                            
+                            mask = (df_det2[C_ART].astype(str) == str(art)) & (df_det2[C_LOC].astype(str) == str(loc))
+                            df_det2.loc[mask, "Justif_Validada"] = val
+                            df_det2.loc[mask, "Validador"] = usuario_actual
+                            df_det2.loc[mask, "Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                        
+                        guardar_detalle_modificado(id_sel, df_det2)
                         st.success("✅ Validación guardada.")
+                        st.rerun()
 
 # ----------------------------
 # TAB 4: CIERRE + REPORTE
@@ -430,7 +542,6 @@ with tab4:
                 def build_report_xlsx():
                     buffer = io.BytesIO()
 
-                    # Datos del encabezado
                     conces = df_det["Concesionaria"].iloc[0] if "Concesionaria" in df_det.columns and len(df_det) else ""
                     sucu = df_det["Sucursal"].iloc[0] if "Sucursal" in df_det.columns and len(df_det) else ""
 
@@ -464,5 +575,6 @@ with tab4:
                 if st.button("✅ Cerrar inventario (marcar Cerrado)"):
                     cerrar_inventario(id_sel, usuario_actual)
                     st.success("Inventario cerrado en Historial_Inventarios.")
+                    st.rerun()
 
 
