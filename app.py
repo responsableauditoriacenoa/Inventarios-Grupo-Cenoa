@@ -13,8 +13,11 @@ from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wide", page_icon="📦")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Obtener ID del spreadsheet desde secrets
-SPREADSHEET_KEY = st.secrets["connections"]["gsheets"]["spreadsheet_key"]
+# Obtener ID del spreadsheet desde secrets (intentar spreadsheet_key primero, luego spreadsheet)
+try:
+    SPREADSHEET_KEY = st.secrets["connections"]["gsheets"]["spreadsheet_key"]
+except KeyError:
+    SPREADSHEET_KEY = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
