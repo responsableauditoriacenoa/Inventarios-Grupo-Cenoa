@@ -624,6 +624,14 @@ with tab3:
             if df_dif.empty:
                 st.success("Sin diferencias")
             else:
+                # Mostrar tabla resumen de conteos y diferencias
+                st.write("### 📋 Resumen de Conteos y Diferencias")
+                cols_resumen = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", C_COSTO]
+                cols_resumen = [c for c in cols_resumen if c in df_dif.columns]
+                df_resumen = df_dif[cols_resumen].copy()
+                st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+                st.divider()
+                
                 if rol_actual in ("Deposito", "admin"):
                     st.write("**Ingresá justificaciones:**")
                     justificaciones_dict = {}
@@ -724,12 +732,44 @@ with tab4:
                 col3.metric("Sobrantes", resultados["cant_sobrantes"])
                 col4.metric("Grado", f"{resultados['grado']}%")
                 
+                # Calcular % de muestra para cada fila
+                valor_muestra = resultados["valor_muestra"]
                 tabla_resultados = pd.DataFrame([
-                    {"Detalle": "Muestra", "Cant": resultados["cant_muestra"], "$": resultados["valor_muestra"]},
-                    {"Detalle": "Faltantes", "Cant": resultados["cant_faltantes"], "$": resultados["valor_faltantes"]},
-                    {"Detalle": "Sobrantes", "Cant": resultados["cant_sobrantes"], "$": resultados["valor_sobrantes"]},
-                    {"Detalle": "Dif Neta", "Cant": resultados["cant_dif_neta"], "$": resultados["valor_dif_neta"]},
-                    {"Detalle": "Dif Absoluta", "Cant": resultados["cant_dif_absoluta"], "$": resultados["valor_dif_absoluta"]},
+                    {
+                        "Detalle": "Muestra", 
+                        "Cant": resultados["cant_muestra"], 
+                        "$": f"{resultados['valor_muestra']:.2f}",
+                        "$ Ajuste": "-",
+                        "% Muestra": "-"
+                    },
+                    {
+                        "Detalle": "Faltantes", 
+                        "Cant": resultados["cant_faltantes"], 
+                        "$": f"{resultados['valor_faltantes']:.2f}",
+                        "$ Ajuste": f"{resultados['valor_faltantes']:.2f}",
+                        "% Muestra": f"{(resultados['valor_faltantes'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                    },
+                    {
+                        "Detalle": "Sobrantes", 
+                        "Cant": resultados["cant_sobrantes"], 
+                        "$": f"{resultados['valor_sobrantes']:.2f}",
+                        "$ Ajuste": f"{resultados['valor_sobrantes']:.2f}",
+                        "% Muestra": f"{(resultados['valor_sobrantes'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                    },
+                    {
+                        "Detalle": "Dif Neta", 
+                        "Cant": resultados["cant_dif_neta"], 
+                        "$": f"{resultados['valor_dif_neta']:.2f}",
+                        "$ Ajuste": f"{resultados['valor_dif_neta']:.2f}",
+                        "% Muestra": f"{(resultados['valor_dif_neta'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                    },
+                    {
+                        "Detalle": "Dif Absoluta", 
+                        "Cant": resultados["cant_dif_absoluta"], 
+                        "$": f"{resultados['valor_dif_absoluta']:.2f}",
+                        "$ Ajuste": f"{resultados['valor_dif_absoluta']:.2f}",
+                        "% Muestra": f"{(resultados['valor_dif_absoluta'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                    },
                 ])
                 
                 st.dataframe(tabla_resultados, use_container_width=True, hide_index=True)
