@@ -719,14 +719,11 @@ with tab2:
                     disabled=[c for c in df_edit.columns if c != "Conteo_Fisico"],
                 )
 
-                if st.button("💾 Guardar conteo"):
-                    df_det2 = df_det.copy()
-                    
-                    key_cols = [C_ART, C_LOC]
-                    if not all(c in df_det2.columns for c in key_cols):
-                        st.error("Columnas no encontradas")
-                        st.stop()
-
+                df_det2 = df_det.copy()
+                key_cols = [C_ART, C_LOC]
+                if not all(c in df_det2.columns for c in key_cols):
+                    st.error("Columnas no encontradas")
+                else:
                     edited2 = edited.copy()
                     for c in key_cols:
                         edited2[c] = edited2[c].astype(str)
@@ -747,27 +744,27 @@ with tab2:
                     conteo_num = pd.to_numeric(df_merge["Conteo_Fisico"], errors="coerce").fillna(0)
                     df_merge["Diferencia"] = conteo_num - stock_num
 
-                    ok = guardar_detalle_modificado(id_sel, df_merge)
-                    if ok:
-                        st.success("✅ Conteo guardado")
-                    else:
-                        st.error("Error al guardar conteo. Revisá Audit_Log o mensajes de error.")
-                    
-                    # Opción de descargar conteo
-                    st.divider()
-                    st.write("### 📥 Descargar conteo:")
-                    cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", C_COSTO]
-                    cols_export = [c for c in cols_export if c in df_merge.columns]
-                    df_export = df_merge[cols_export].copy()
-                    xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Conteo", title=f"Conteo Físico - {id_sel}")
-                    st.download_button(
-                        "⬇️ Descargar Conteo Excel",
-                        data=xlsx_data,
-                        file_name=f"Conteo_{id_sel}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    
-                    st.rerun()
+                    col_save, col_dl = st.columns([1, 1])
+                    with col_save:
+                        if st.button("💾 Guardar conteo"):
+                            ok = guardar_detalle_modificado(id_sel, df_merge)
+                            if ok:
+                                st.success("✅ Conteo guardado")
+                            else:
+                                st.error("Error al guardar conteo. Revisá Audit_Log o mensajes de error.")
+                            st.rerun()
+
+                    with col_dl:
+                        cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", C_COSTO]
+                        cols_export = [c for c in cols_export if c in df_merge.columns]
+                        df_export = df_merge[cols_export].copy()
+                        xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Conteo", title=f"Conteo Físico - {id_sel}")
+                        st.download_button(
+                            "⬇️ Descargar Conteo Excel",
+                            data=xlsx_data,
+                            file_name=f"Conteo_{id_sel}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
 
 # ----------------------------
 # TAB 3
