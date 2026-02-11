@@ -239,17 +239,16 @@ def export_dataframe_to_excel(df: pd.DataFrame, sheet_name: str = "Datos", title
             cell.alignment = Alignment(horizontal="left", vertical="center")
     
     # Auto-adjust column widths
-    for column in ws.columns:
+    for col_idx, column in enumerate(ws.iter_cols(min_row=1, max_row=ws.max_row, max_col=ws.max_column), start=1):
         max_length = 0
-        column_letter = column[0].column_letter
         for cell in column:
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except Exception:
                 pass
         adjusted_width = min(max_length + 2, 50)
-        ws.column_dimensions[column_letter].width = adjusted_width
+        ws.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
     
     wb.save(buffer)
     buffer.seek(0)
