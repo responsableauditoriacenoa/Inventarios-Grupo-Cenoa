@@ -75,7 +75,7 @@ def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
-    """Write worksheet using gspread"""
+    """Write worksheet using gspread. Returns (ok: bool, message: str)."""
     try:
         # Convert Timestamp and other non-JSON-serializable types to strings
         df = df.copy()
@@ -101,14 +101,18 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
             st.cache_data.clear()
         except Exception:
             pass
-        return True
+        return True, ""
     except Exception as e:
         msg = str(e)
         if "RATE_LIMIT_EXCEEDED" in msg or "quota" in msg.lower() or "RESOURCE_EXHAUSTED" in msg:
-            st.error(f"Error writing {ws_name}: cuota de Google Sheets excedida. Intentá de nuevo más tarde.")
+            user_msg = f"Error writing {ws_name}: cuota de Google Sheets excedida. Intentá de nuevo más tarde."
         else:
-            st.error(f"Error writing {ws_name}: {msg}")
-        return False
+            user_msg = f"Error writing {ws_name}: {msg}"
+        try:
+            st.error(user_msg)
+        except Exception:
+            pass
+        return False, user_msg
 
 def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
     """Append to worksheet with detailed logging"""
@@ -124,7 +128,9 @@ def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
         
         df_exist = read_gspread_worksheet(ws_name)
         if df_exist.empty:
-            ok = write_gspread_worksheet(ws_name, df_new)
+            ok, msg = write_gspread_worksheet(ws_name, df_new)
+            if not ok:
+                st.error(f"Append failed writing new sheet {ws_name}: {msg}")
             return bool(ok)
         
         # Normalize columns between existing and new
@@ -136,7 +142,9 @@ def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
                 df_exist[col] = ""
         
         df_final = pd.concat([df_exist, df_new[df_exist.columns]], ignore_index=True)
-        ok = write_gspread_worksheet(ws_name, df_final)
+        ok, msg = write_gspread_worksheet(ws_name, df_final)
+        if not ok:
+            st.error(f"Append failed updating {ws_name}: {msg}")
         # Ensure cache invalidation after append
         try:
             st.cache_data.clear()
@@ -361,16 +369,16 @@ def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
     try:
         df_all = read_gspread_worksheet(SHEET_DET)
         if df_all.empty:
-            ok = write_gspread_worksheet(SHEET_DET, df_mod)
-            log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", "Creó hoja o sobreescribió")
+            ok, msg = write_gspread_worksheet(SHEET_DET, df_mod)
+            log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", msg if msg else "Creó hoja o sobreescribió")
             return bool(ok)
 
         df_all = df_all.copy()
         mask = df_all["ID_Inventario"].astype(str) == str(id_inv)
         df_rest = df_all.loc[~mask].copy()
         df_final = pd.concat([df_rest, df_mod], ignore_index=True)
-        ok = write_gspread_worksheet(SHEET_DET, df_final)
-        log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", "Actualizó detalle")
+        ok, msg = write_gspread_worksheet(SHEET_DET, df_final)
+        log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", msg if msg else "Actualizó detalle")
         return bool(ok)
     except Exception as e:
         log_audit("guardar_detalle", id_inv, 0, "ERROR", str(e))
@@ -388,7 +396,8 @@ def cerrar_inventario(id_inv: str, usuario: str):
     df_hist.loc[mask, "Estado"] = "Cerrado"
     df_hist.loc[mask, "Cierre_Fecha"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     df_hist.loc[mask, "Cierre_Usuario"] = usuario
-    write_gspread_worksheet(SHEET_HIST, df_hist)
+    ok, msg = write_gspread_worksheet(SHEET_HIST, df_hist)
+    log_audit("cerrar_inventario", id_inv, 0, "OK" if ok else "ERROR", msg if msg else "Cerró inventario")
 
 # ----------------------------
 # UI
