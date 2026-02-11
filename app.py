@@ -259,6 +259,17 @@ def _admin_debug_show():
         st.write("---")
         st.info("Este panel muestra solo conteos y nombres de columnas para depuración.")
 
+        # Mostrar últimos registros de Audit_Log si existe
+        try:
+            dfa = read_gspread_worksheet(SHEET_AUDIT)
+            if not dfa.empty:
+                st.write("**Audit_Log (últimas 10 filas)**")
+                st.dataframe(dfa.tail(10).sort_values("Timestamp", ascending=False), use_container_width=True)
+            else:
+                st.write("**Audit_Log**: (vacío)")
+        except Exception as e:
+            st.write(f"Audit_Log: error al leer: {e}")
+
 if usuario_actual == "admin":
     _admin_debug_show()
 
