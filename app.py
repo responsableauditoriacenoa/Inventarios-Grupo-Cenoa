@@ -754,8 +754,7 @@ with tab2:
                             st.rerun()
 
                     with col_dl:
-                        cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", C_COSTO]
-                        cols_export = [c for c in cols_export if c in df_merge.columns]
+                        cols_export = [c for c in cols_show if c in df_merge.columns]
                         df_export = df_merge[cols_export].copy()
                         xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Conteo", title=f"Conteo Físico - {id_sel}")
                         st.download_button(
