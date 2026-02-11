@@ -312,8 +312,9 @@ def cargar_detalle(id_inv: str) -> pd.DataFrame:
 
 def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
     """Calculate inventory results based on Auditor adjustments.
-    - Uses only rows where Tipo_Ajuste = "Ajuste" (not "Canje" or "Sin Ajuste")
-    - Returns dict with results and list of canjes for separate display
+    - Q: quantity (Stock for muestra, Ajuste_Cantidad for faltantes/sobrantes)
+    - $ Ajuste: valuation at cost = Costo_Rep * Q
+    - %: percentage of total muestra valuation
     """
     if df_det.empty:
         return {"canjes": []}
@@ -336,39 +337,39 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
     
     df_r["_stock"] = pd.to_numeric(df_r[stock_col], errors="coerce").fillna(0)
     df_r["_costo"] = pd.to_numeric(df_r[costo_col], errors="coerce").fillna(0)
+    df_r["_ajuste"] = pd.to_numeric(df_r.get("Ajuste_Cantidad", 0), errors="coerce").fillna(0)
     
-    # Use Ajuste_Cantidad if it exists and is not empty, otherwise use Diferencia
-    if "Ajuste_Cantidad" in df_r.columns:
-        df_r["_dif"] = pd.to_numeric(df_r["Ajuste_Cantidad"], errors="coerce").fillna(0)
-        # For rows where Ajuste_Cantidad is empty, fall back to Diferencia
-        if "Diferencia" in df_r.columns:
-            mask_empty = df_r["_dif"] == 0
-            df_r.loc[mask_empty, "_dif"] = pd.to_numeric(df_r.loc[mask_empty, "Diferencia"], errors="coerce").fillna(0)
-    else:
-        dif_col = "Diferencia"
-        if dif_col not in df_r.columns:
-            return {"canjes": []}
-        df_r["_dif"] = pd.to_numeric(df_r[dif_col], errors="coerce").fillna(0)
-    
+    # Q: Cantidades
     cant_muestra = int(df_r["_stock"].sum())
+    
+    # Faltantes (negative adjustments)
+    mask_falt = df_r["_ajuste"] < 0
+    cant_faltantes = int((df_r.loc[mask_falt, "_ajuste"].abs()).sum())
+    
+    # Sobrantes (positive adjustments)
+    mask_sobr = df_r["_ajuste"] > 0
+    cant_sobrantes = int(df_r.loc[mask_sobr, "_ajuste"].sum())
+    
+    # Diferencia neta y absoluta
+    cant_dif_neta = int(df_r["_ajuste"].sum())  # Sobrantes - Faltantes
+    cant_dif_absoluta = int(df_r["_ajuste"].abs().sum())  # Faltantes + Sobrantes (abs)
+    
+    # $ Ajuste: Valuación a costo de reposición
     valor_muestra = (df_r["_stock"] * df_r["_costo"]).sum()
+    valor_faltantes = (df_r.loc[mask_falt, "_ajuste"].abs() * df_r.loc[mask_falt, "_costo"]).sum()
+    valor_sobrantes = (df_r.loc[mask_sobr, "_ajuste"] * df_r.loc[mask_sobr, "_costo"]).sum()
+    valor_dif_neta = (df_r["_ajuste"] * df_r["_costo"]).sum()
+    valor_dif_absoluta = (df_r["_ajuste"].abs() * df_r["_costo"]).sum()
     
-    mask_falt = df_r["_dif"] < 0
-    cant_faltantes = int((df_r.loc[mask_falt, "_dif"].abs()).sum())
-    valor_faltantes = (df_r.loc[mask_falt, "_dif"].abs() * df_r.loc[mask_falt, "_costo"]).sum()
+    # % sobre total de muestra
+    pct_muestra = 100.0
+    pct_faltantes = (valor_faltantes / valor_muestra * 100) if valor_muestra > 0 else 0
+    pct_sobrantes = (valor_sobrantes / valor_muestra * 100) if valor_muestra > 0 else 0
+    pct_dif_neta = (valor_dif_neta / valor_muestra * 100) if valor_muestra > 0 else 0
+    pct_dif_absoluta = (valor_dif_absoluta / valor_muestra * 100) if valor_muestra > 0 else 0
     
-    mask_sobr = df_r["_dif"] > 0
-    cant_sobrantes = int(df_r.loc[mask_sobr, "_dif"].sum())
-    valor_sobrantes = (df_r.loc[mask_sobr, "_dif"] * df_r.loc[mask_sobr, "_costo"]).sum()
-    
-    cant_dif_neta = int(df_r["_dif"].sum())
-    valor_dif_neta = (df_r["_dif"] * df_r["_costo"]).sum()
-    
-    cant_dif_absoluta = int(df_r["_dif"].abs().sum())
-    valor_dif_absoluta = (df_r["_dif"].abs() * df_r["_costo"]).sum()
-    
-    pct_absoluto = (valor_dif_absoluta / valor_muestra * 100) if valor_muestra else 0
-    
+    # Escala de grado basada en % absoluto
+    pct_absoluto = pct_dif_absoluta
     escala = [(0.00, 100), (0.10, 94), (0.80, 82), (1.60, 65), (2.40, 35), (3.30, 0)]
     escala_sorted = sorted(escala, key=lambda x: x[0])
     grado = 0
@@ -399,14 +400,19 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
     return {
         "cant_muestra": cant_muestra,
         "valor_muestra": valor_muestra,
+        "pct_muestra": pct_muestra,
         "cant_faltantes": cant_faltantes,
         "valor_faltantes": valor_faltantes,
+        "pct_faltantes": pct_faltantes,
         "cant_sobrantes": cant_sobrantes,
         "valor_sobrantes": valor_sobrantes,
+        "pct_sobrantes": pct_sobrantes,
         "cant_dif_neta": cant_dif_neta,
         "valor_dif_neta": valor_dif_neta,
+        "pct_dif_neta": pct_dif_neta,
         "cant_dif_absoluta": cant_dif_absoluta,
         "valor_dif_absoluta": valor_dif_absoluta,
+        "pct_dif_absoluta": pct_dif_absoluta,
         "pct_absoluto": pct_absoluto,
         "grado": grado,
         "escala": escala_sorted,
@@ -819,38 +825,33 @@ with tab4:
                 tabla_resultados = pd.DataFrame([
                     {
                         "Detalle": "Muestra", 
-                        "Cant": resultados["cant_muestra"], 
-                        "$": f"{resultados['valor_muestra']:.2f}",
-                        "$ Ajuste": "-",
-                        "% Muestra": "-"
+                        "Q": resultados["cant_muestra"], 
+                        "$ Ajuste": f"{resultados['valor_muestra']:.2f}",
+                        "%": f"{resultados['pct_muestra']:.2f}%"
                     },
                     {
                         "Detalle": "Faltantes", 
-                        "Cant": resultados["cant_faltantes"], 
-                        "$": f"{resultados['valor_faltantes']:.2f}",
+                        "Q": resultados["cant_faltantes"], 
                         "$ Ajuste": f"{resultados['valor_faltantes']:.2f}",
-                        "% Muestra": f"{(resultados['valor_faltantes'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                        "%": f"{resultados['pct_faltantes']:.2f}%"
                     },
                     {
                         "Detalle": "Sobrantes", 
-                        "Cant": resultados["cant_sobrantes"], 
-                        "$": f"{resultados['valor_sobrantes']:.2f}",
+                        "Q": resultados["cant_sobrantes"], 
                         "$ Ajuste": f"{resultados['valor_sobrantes']:.2f}",
-                        "% Muestra": f"{(resultados['valor_sobrantes'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                        "%": f"{resultados['pct_sobrantes']:.2f}%"
                     },
                     {
                         "Detalle": "Dif Neta", 
-                        "Cant": resultados["cant_dif_neta"], 
-                        "$": f"{resultados['valor_dif_neta']:.2f}",
+                        "Q": resultados["cant_dif_neta"], 
                         "$ Ajuste": f"{resultados['valor_dif_neta']:.2f}",
-                        "% Muestra": f"{(resultados['valor_dif_neta'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                        "%": f"{resultados['pct_dif_neta']:.2f}%"
                     },
                     {
                         "Detalle": "Dif Absoluta", 
-                        "Cant": resultados["cant_dif_absoluta"], 
-                        "$": f"{resultados['valor_dif_absoluta']:.2f}",
+                        "Q": resultados["cant_dif_absoluta"], 
                         "$ Ajuste": f"{resultados['valor_dif_absoluta']:.2f}",
-                        "% Muestra": f"{(resultados['valor_dif_absoluta'] / valor_muestra * 100) if valor_muestra > 0 else 0:.2f}%"
+                        "%": f"{resultados['pct_dif_absoluta']:.2f}%"
                     },
                 ])
                 
