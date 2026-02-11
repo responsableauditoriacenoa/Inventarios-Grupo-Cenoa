@@ -311,21 +311,32 @@ def cargar_detalle(id_inv: str) -> pd.DataFrame:
     return df[df["ID_Inventario"].astype(str) == str(id_inv)].copy()
 
 def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
-    """Calculate inventory results"""
+    """Calculate inventory results. Uses Ajuste_Cantidad if present, otherwise uses Diferencia."""
     if df_det.empty:
         return {}
     
     df_r = df_det.copy()
     stock_col = C_STOCK if C_STOCK in df_r.columns else None
     costo_col = C_COSTO if C_COSTO in df_r.columns else None
-    dif_col = "Diferencia"
     
-    if not stock_col or not costo_col or dif_col not in df_r.columns:
+    if not stock_col or not costo_col:
         return {}
     
     df_r["_stock"] = pd.to_numeric(df_r[stock_col], errors="coerce").fillna(0)
     df_r["_costo"] = pd.to_numeric(df_r[costo_col], errors="coerce").fillna(0)
-    df_r["_dif"] = pd.to_numeric(df_r[dif_col], errors="coerce").fillna(0)
+    
+    # Use Ajuste_Cantidad if it exists and is not empty, otherwise use Diferencia
+    if "Ajuste_Cantidad" in df_r.columns:
+        df_r["_dif"] = pd.to_numeric(df_r["Ajuste_Cantidad"], errors="coerce").fillna(0)
+        # For rows where Ajuste_Cantidad is empty, fall back to Diferencia
+        if "Diferencia" in df_r.columns:
+            mask_empty = df_r["_dif"] == 0
+            df_r.loc[mask_empty, "_dif"] = pd.to_numeric(df_r.loc[mask_empty, "Diferencia"], errors="coerce").fillna(0)
+    else:
+        dif_col = "Diferencia"
+        if dif_col not in df_r.columns:
+            return {}
+        df_r["_dif"] = pd.to_numeric(df_r[dif_col], errors="coerce").fillna(0)
     
     cant_muestra = int(df_r["_stock"].sum())
     valor_muestra = (df_r["_stock"] * df_r["_costo"]).sum()
@@ -664,39 +675,77 @@ with tab3:
                             st.error("Error al guardar justificaciones. Revisá Audit_Log.")
                         st.rerun()
                 else:
-                    st.write("**Validá justificaciones:**")
+                    st.write("**Validá justificaciones y asignà ajustes:**")
                     validaciones_dict = {}
+                    ajustes_dict = {}
                     
                     for idx, row in df_dif.iterrows():
                         art = row[C_ART]
                         loc = row[C_LOC]
+                        dif = row.get("Diferencia", 0)
+                        costo = pd.to_numeric(row.get(C_COSTO, 0), errors="coerce")
                         just = row.get("Justificacion", "")
                         val_actual = row.get("Justif_Validada", "")
+                        tipo_ajuste_actual = row.get("Tipo_Ajuste", "")
+                        ajuste_cant_actual = row.get("Ajuste_Cantidad", "")
                         
-                        st.write(f"**{art} ({loc})**")
+                        st.write(f"**{art} ({loc}) - Diferencia: {dif} - Costo: ${costo:.2f}**")
                         st.write(f"*{just if just else '(sin justificación)'}*")
                         
-                        val = st.selectbox(
-                            "¿Validada?",
-                            options=["", "SI", "NO"],
-                            index=(["", "SI", "NO"].index(val_actual) if val_actual in ["SI", "NO"] else 0),
-                            key=f"val_{idx}"
-                        )
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            val = st.selectbox(
+                                "¿Validada?",
+                                options=["", "SI", "NO"],
+                                index=(["", "SI", "NO"].index(val_actual) if val_actual in ["SI", "NO"] else 0),
+                                key=f"val_{idx}"
+                            )
+                        
+                        # Habilitar ajuste solo si Justif_Validada es "SI"
+                        if val == "SI":
+                            with col2:
+                                tipo_ajuste = st.selectbox(
+                                    "Tipo de Ajuste",
+                                    options=["", "Ajuste", "Canje", "Sin Ajuste"],
+                                    index=(["", "Ajuste", "Canje", "Sin Ajuste"].index(tipo_ajuste_actual) if tipo_ajuste_actual in ["Ajuste", "Canje", "Sin Ajuste"] else 0),
+                                    key=f"tipo_ajuste_{idx}"
+                                )
+                            
+                            # Mostrar campo numérico solo si elige "Ajuste" o "Canje"
+                            if tipo_ajuste in ("Ajuste", "Canje"):
+                                ajuste_cant = st.number_input(
+                                    f"Cantidad a {tipo_ajuste.lower()} (neg. faltante, pos. sobrante)",
+                                    value=float(ajuste_cant_actual) if ajuste_cant_actual else 0.0,
+                                    step=1.0,
+                                    key=f"ajuste_cant_{idx}"
+                                )
+                            else:
+                                ajuste_cant = 0.0
+                                tipo_ajuste = "Sin Ajuste" if tipo_ajuste == "" else tipo_ajuste
+                        else:
+                            tipo_ajuste = ""
+                            ajuste_cant = 0.0
+                        
                         validaciones_dict[idx] = val
+                        ajustes_dict[idx] = (tipo_ajuste, ajuste_cant)
                         st.divider()
                     
-                    if st.button("💾 Guardar validación"):
+                    if st.button("💾 Guardar validación y ajustes"):
                         df_det2 = df_det.copy()
                         for idx, val in validaciones_dict.items():
                             df_det2.loc[df_det2.index == idx, "Justif_Validada"] = val
                             df_det2.loc[df_det2.index == idx, "Validador"] = usuario_actual
                             df_det2.loc[df_det2.index == idx, "Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                            if idx in ajustes_dict:
+                                tipo, cantidad = ajustes_dict[idx]
+                                df_det2.loc[df_det2.index == idx, "Tipo_Ajuste"] = tipo
+                                df_det2.loc[df_det2.index == idx, "Ajuste_Cantidad"] = cantidad
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
                             st.success("✅ Guardado")
                         else:
-                            st.error("Error al guardar validaciones. Revisá Audit_Log.")
+                            st.error("Error al guardar validaciones y ajustes. Revisá Audit_Log.")
                         st.rerun()
 
 # ----------------------------
