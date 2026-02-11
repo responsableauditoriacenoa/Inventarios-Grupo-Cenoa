@@ -76,6 +76,12 @@ def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
 def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
     """Write worksheet using gspread"""
     try:
+        # Convert Timestamp and other non-JSON-serializable types to strings
+        df = df.copy()
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].astype(str)
+
         spreadsheet = get_spreadsheet()
         try:
             worksheet = spreadsheet.worksheet(ws_name)
@@ -450,7 +456,7 @@ with tab1:
                     st.info(f"Chequeo detalle: error al leer hoja: {e}")
 
                 # Refrescar vista (el usuario puede volver a abrir la pestaña o recargar)
-                st.experimental_rerun()
+                st.rerun()
 
 # ----------------------------
 # TAB 2
