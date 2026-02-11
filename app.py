@@ -254,6 +254,13 @@ def export_dataframe_to_excel(df: pd.DataFrame, sheet_name: str = "Datos", title
     buffer.seek(0)
     return buffer
 
+def parse_ar_number(series: pd.Series) -> pd.Series:
+    """Parse numbers that may use Argentine formatting (1.234,56)."""
+    s = series.astype(str).str.strip()
+    has_comma = s.str.contains(",", regex=False)
+    s = s.where(~has_comma, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
+    return pd.to_numeric(s, errors="coerce")
+
 # ----------------------------
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against bcrypt hash"""
@@ -396,8 +403,8 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
     if not stock_col or not costo_col:
         return {"canjes": []}
     
-    df_all["_stock"] = pd.to_numeric(df_all[stock_col], errors="coerce").fillna(0)
-    df_all["_costo"] = pd.to_numeric(df_all[costo_col], errors="coerce").fillna(0)
+    df_all["_stock"] = parse_ar_number(df_all[stock_col]).fillna(0)
+    df_all["_costo"] = parse_ar_number(df_all[costo_col]).fillna(0)
     
     # MUESTRA: sum of ALL articles (no filter)
     cant_muestra = int(df_all["_stock"].sum())
@@ -739,8 +746,8 @@ with tab2:
                     if "Conteo_Fisico_new" in df_merge.columns:
                         df_merge = df_merge.drop(columns=["Conteo_Fisico_new"])
 
-                    stock_num = pd.to_numeric(df_merge[C_STOCK], errors="coerce").fillna(0)
-                    conteo_num = pd.to_numeric(df_merge["Conteo_Fisico"], errors="coerce").fillna(0)
+                    stock_num = parse_ar_number(df_merge[C_STOCK]).fillna(0)
+                    conteo_num = parse_ar_number(df_merge["Conteo_Fisico"]).fillna(0)
                     df_merge["Diferencia"] = conteo_num - stock_num
 
                     col_save, col_dl = st.columns([1, 1])
@@ -754,8 +761,14 @@ with tab2:
                             st.rerun()
 
                     with col_dl:
-                        cols_export = [c for c in cols_show if c in df_merge.columns]
-                        df_export = df_merge[cols_export].copy()
+                        df_view = df_edit.copy()
+                        df_view["Conteo_Fisico"] = edited["Conteo_Fisico"]
+                        stock_num_view = parse_ar_number(df_view[C_STOCK]).fillna(0)
+                        conteo_num_view = parse_ar_number(df_view["Conteo_Fisico"]).fillna(0)
+                        df_view["Diferencia"] = conteo_num_view - stock_num_view
+
+                        cols_export = [c for c in cols_show if c in df_view.columns]
+                        df_export = df_view[cols_export].copy()
                         xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Conteo", title=f"Conteo Físico - {id_sel}")
                         st.download_button(
                             "⬇️ Descargar Conteo Excel",
