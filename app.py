@@ -185,6 +185,29 @@ usuario_actual = st.session_state.get("usuario")
 nombre_actual = st.session_state.get("nombre_usuario")
 rol_actual = st.session_state.get("rol")
 
+# --- Admin debug: mostrar estado de las hojas (solo para admin)
+def _admin_debug_show():
+    try:
+        dfh = read_gspread_worksheet(SHEET_HIST)
+        dfd = read_gspread_worksheet(SHEET_DET)
+    except Exception as e:
+        st.sidebar.error(f"Debug read error: {e}")
+        return
+
+    with st.sidebar.expander("GSheets debug (admin)", expanded=False):
+        st.write("**Historial_Inventarios**")
+        st.write("Rows:", 0 if dfh is None else len(dfh))
+        st.write("Columns:", list(dfh.columns) if not (dfh is None or dfh.empty) else [])
+        st.write("---")
+        st.write("**Detalle_Articulos**")
+        st.write("Rows:", 0 if dfd is None else len(dfd))
+        st.write("Columns:", list(dfd.columns) if not (dfd is None or dfd.empty) else [])
+        st.write("---")
+        st.info("Este panel muestra solo conteos y nombres de columnas para depuración.")
+
+if usuario_actual == "admin":
+    _admin_debug_show()
+
 # ----------------------------
 # DATA FUNCTIONS
 # ----------------------------
