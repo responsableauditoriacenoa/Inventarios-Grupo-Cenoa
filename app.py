@@ -77,20 +77,31 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
     """Write worksheet using gspread"""
     try:
         spreadsheet = get_spreadsheet()
-        worksheet = spreadsheet.worksheet(ws_name)
-        worksheet.clear()
+        try:
+            worksheet = spreadsheet.worksheet(ws_name)
+            worksheet.clear()
+        except Exception:
+            # Worksheet may not exist yet — create it with enough rows/cols
+            rows = max(100, len(df) + 5)
+            cols = max(10, len(df.columns))
+            worksheet = spreadsheet.add_worksheet(title=ws_name, rows=str(rows), cols=str(cols))
+
+        # Update data (header + rows)
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+
         # Invalidate read cache so subsequent reads fetch fresh data
         try:
             st.cache_data.clear()
         except Exception:
             pass
+        return True
     except Exception as e:
         msg = str(e)
         if "RATE_LIMIT_EXCEEDED" in msg or "quota" in msg.lower() or "RESOURCE_EXHAUSTED" in msg:
             st.error(f"Error writing {ws_name}: cuota de Google Sheets excedida. Intentá de nuevo más tarde.")
         else:
             st.error(f"Error writing {ws_name}: {msg}")
+        return False
 
 def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
     """Append to worksheet"""
