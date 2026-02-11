@@ -53,15 +53,24 @@ def get_spreadsheet():
     """Get spreadsheet by ID"""
     return client.open_by_key(SPREADSHEET_ID)
 
+@st.cache_data(ttl=30)
 def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
-    """Read worksheet using gspread"""
+    """Read worksheet using gspread with short caching to avoid hitting API quotas.
+
+    Cached for 30s; writers will clear the cache after updates.
+    """
     try:
         spreadsheet = get_spreadsheet()
         worksheet = spreadsheet.worksheet(ws_name)
         data = worksheet.get_all_records()
         return pd.DataFrame(data) if data else pd.DataFrame()
     except Exception as e:
-        st.error(f"Error reading {ws_name}: {str(e)}")
+        # Detect quota errors and show a friendly message
+        msg = str(e)
+        if "RATE_LIMIT_EXCEEDED" in msg or "quota" in msg.lower() or "RESOURCE_EXHAUSTED" in msg:
+            st.error(f"Error reading {ws_name}: cuota de Google Sheets excedida. Esperá unos segundos y volvé a intentar.")
+        else:
+            st.error(f"Error reading {ws_name}: {msg}")
         return pd.DataFrame()
 
 def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
@@ -71,8 +80,17 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
         worksheet = spreadsheet.worksheet(ws_name)
         worksheet.clear()
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        # Invalidate read cache so subsequent reads fetch fresh data
+        try:
+            st.cache_data.clear()
+        except Exception:
+            pass
     except Exception as e:
-        st.error(f"Error writing {ws_name}: {str(e)}")
+        msg = str(e)
+        if "RATE_LIMIT_EXCEEDED" in msg or "quota" in msg.lower() or "RESOURCE_EXHAUSTED" in msg:
+            st.error(f"Error writing {ws_name}: cuota de Google Sheets excedida. Intentá de nuevo más tarde.")
+        else:
+            st.error(f"Error writing {ws_name}: {msg}")
 
 def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
     """Append to worksheet"""
@@ -91,6 +109,11 @@ def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
     
     df_final = pd.concat([df_exist, df_new[df_exist.columns]], ignore_index=True)
     write_gspread_worksheet(ws_name, df_final)
+    # Ensure cache invalidation after append
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
 
 # ----------------------------
 # AUTH
