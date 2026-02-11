@@ -110,28 +110,41 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
         return False
 
 def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
-    """Append to worksheet"""
-    df_exist = read_gspread_worksheet(ws_name)
-    if df_exist.empty:
-        ok = write_gspread_worksheet(ws_name, df_new)
-        return bool(ok)
-    
-    df_new = df_new.copy()
-    for col in df_exist.columns:
-        if col not in df_new.columns:
-            df_new[col] = ""
-    for col in df_new.columns:
-        if col not in df_exist.columns:
-            df_exist[col] = ""
-    
-    df_final = pd.concat([df_exist, df_new[df_exist.columns]], ignore_index=True)
-    ok = write_gspread_worksheet(ws_name, df_final)
-    # Ensure cache invalidation after append
+    """Append to worksheet with detailed logging"""
     try:
-        st.cache_data.clear()
-    except Exception:
-        pass
-    return bool(ok)
+        # Convert all non-string types to avoid JSON serialization issues
+        df_new = df_new.copy()
+        for col in df_new.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_new[col]):
+                df_new[col] = df_new[col].astype(str)
+            elif not pd.api.types.is_object_dtype(df_new[col]):
+                # Convert non-string types to strings
+                df_new[col] = df_new[col].astype(str)
+        
+        df_exist = read_gspread_worksheet(ws_name)
+        if df_exist.empty:
+            ok = write_gspread_worksheet(ws_name, df_new)
+            return bool(ok)
+        
+        # Normalize columns between existing and new
+        for col in df_exist.columns:
+            if col not in df_new.columns:
+                df_new[col] = ""
+        for col in df_new.columns:
+            if col not in df_exist.columns:
+                df_exist[col] = ""
+        
+        df_final = pd.concat([df_exist, df_new[df_exist.columns]], ignore_index=True)
+        ok = write_gspread_worksheet(ws_name, df_final)
+        # Ensure cache invalidation after append
+        try:
+            st.cache_data.clear()
+        except Exception:
+            pass
+        return bool(ok)
+    except Exception as e:
+        st.error(f"Error appending to {ws_name}: {str(e)}")
+        return False
 
 # ----------------------------
 # AUTH
