@@ -107,8 +107,8 @@ def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
     """Append to worksheet"""
     df_exist = read_gspread_worksheet(ws_name)
     if df_exist.empty:
-        write_gspread_worksheet(ws_name, df_new)
-        return
+        ok = write_gspread_worksheet(ws_name, df_new)
+        return bool(ok)
     
     df_new = df_new.copy()
     for col in df_exist.columns:
@@ -119,12 +119,13 @@ def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
             df_exist[col] = ""
     
     df_final = pd.concat([df_exist, df_new[df_exist.columns]], ignore_index=True)
-    write_gspread_worksheet(ws_name, df_final)
+    ok = write_gspread_worksheet(ws_name, df_final)
     # Ensure cache invalidation after append
     try:
         st.cache_data.clear()
     except Exception:
         pass
+    return bool(ok)
 
 # ----------------------------
 # AUTH
@@ -425,13 +426,31 @@ with tab1:
                     "Cierre_Fecha": "",
                     "Cierre_Usuario": ""
                 }])
-                append_gspread_worksheet(SHEET_HIST, nueva_fila)
+                ok_hist = append_gspread_worksheet(SHEET_HIST, nueva_fila)
 
                 muestra["ID_Inventario"] = id_inv
-                append_gspread_worksheet(SHEET_DET, muestra)
+                ok_det = append_gspread_worksheet(SHEET_DET, muestra)
 
-                st.success(f"✅ Inventario {id_inv} creado.")
-                st.rerun()
+                if ok_hist and ok_det:
+                    st.success(f"✅ Inventario {id_inv} creado y detalle guardado ({len(muestra)} filas).")
+                elif ok_hist and not ok_det:
+                    st.warning(f"Inventario {id_inv} creado en historial, pero no se pudo guardar el detalle.")
+                else:
+                    st.error("No se pudo crear el inventario. Revisá los mensajes de error.")
+
+                # Mostrar confirmación / chequeo rápido del detalle (solo conteos y columnas)
+                try:
+                    df_det_check = read_gspread_worksheet(SHEET_DET)
+                    if not df_det_check.empty and "ID_Inventario" in df_det_check.columns:
+                        cnt = int((df_det_check["ID_Inventario"].astype(str) == str(id_inv)).sum())
+                        st.info(f"Detalle guardado: {cnt} filas para {id_inv} (total hoja: {len(df_det_check)}).")
+                    else:
+                        st.info("Detalle no encontrado o estructura no contiene 'ID_Inventario'.")
+                except Exception as e:
+                    st.info(f"Chequeo detalle: error al leer hoja: {e}")
+
+                # Refrescar vista (el usuario puede volver a abrir la pestaña o recargar)
+                st.experimental_rerun()
 
 # ----------------------------
 # TAB 2
