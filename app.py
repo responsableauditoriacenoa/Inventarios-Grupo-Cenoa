@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import gspread
 import datetime
 import io
@@ -92,6 +93,10 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
             rows = max(100, len(df) + 5)
             cols = max(10, len(df.columns))
             worksheet = spreadsheet.add_worksheet(title=ws_name, rows=str(rows), cols=str(cols))
+
+        # Replace NaN/NaT and infinities so JSON serialization won't fail
+        df = df.where(pd.notnull(df), "")
+        df = df.replace([np.inf, -np.inf], "")
 
         # Update data (header + rows)
         worksheet.update([df.columns.values.tolist()] + df.values.tolist())
