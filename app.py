@@ -29,6 +29,7 @@ SPREADSHEET_ID = "1Dwn-uXcsT8CKFKwL0kZ4WyeVSwOGzXGcxMTW1W1bTe4"
 
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
+SHEET_AUDIT = "Audit_Log"
 
 # Columnas esperadas del Excel
 C_ART = "Artículo"
@@ -146,6 +147,28 @@ def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
         st.error(f"Error appending to {ws_name}: {str(e)}")
         return False
 
+
+def log_audit(action: str, id_inv: str, filas: int, status: str, mensaje: str = ""):
+    """Append an audit row to the Audit_Log sheet. Non-blocking: failures are logged to UI but do not raise."""
+    try:
+        row = pd.DataFrame([{
+            "Timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Usuario": st.session_state.get("usuario", ""),
+            "Rol": st.session_state.get("rol", ""),
+            "Accion": action,
+            "ID_Inventario": id_inv,
+            "Filas": int(filas) if filas is not None else 0,
+            "Status": status,
+            "Mensaje": mensaje
+        }])
+        append_gspread_worksheet(SHEET_AUDIT, row)
+    except Exception as e:
+        # Non-fatal: show a warning in the UI for admin visibility
+        try:
+            st.warning(f"No se pudo escribir Audit_Log: {e}")
+        except Exception:
+            pass
+
 # ----------------------------
 # AUTH
 # ----------------------------
@@ -239,6 +262,15 @@ def _admin_debug_show():
 if usuario_actual == "admin":
     _admin_debug_show()
 
+    # Mostrar email del service account en debug para facilitar verificación de permisos
+    try:
+        sa_email = st.secrets.get("connections", {}).get("gsheets", {}).get("client_email")
+        with st.sidebar.expander("Service Account info", expanded=False):
+            st.write("Service account:")
+            st.write(sa_email if sa_email else "(no encontrado en secrets)")
+    except Exception:
+        pass
+
 # ----------------------------
 # DATA FUNCTIONS
 # ----------------------------
@@ -315,16 +347,23 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
 
 def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
     """Update inventory details"""
-    df_all = read_gspread_worksheet(SHEET_DET)
-    if df_all.empty:
-        write_gspread_worksheet(SHEET_DET, df_mod)
-        return
-    
-    df_all = df_all.copy()
-    mask = df_all["ID_Inventario"].astype(str) == str(id_inv)
-    df_rest = df_all.loc[~mask].copy()
-    df_final = pd.concat([df_rest, df_mod], ignore_index=True)
-    write_gspread_worksheet(SHEET_DET, df_final)
+    try:
+        df_all = read_gspread_worksheet(SHEET_DET)
+        if df_all.empty:
+            ok = write_gspread_worksheet(SHEET_DET, df_mod)
+            log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", "Creó hoja o sobreescribió")
+            return bool(ok)
+
+        df_all = df_all.copy()
+        mask = df_all["ID_Inventario"].astype(str) == str(id_inv)
+        df_rest = df_all.loc[~mask].copy()
+        df_final = pd.concat([df_rest, df_mod], ignore_index=True)
+        ok = write_gspread_worksheet(SHEET_DET, df_final)
+        log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", "Actualizó detalle")
+        return bool(ok)
+    except Exception as e:
+        log_audit("guardar_detalle", id_inv, 0, "ERROR", str(e))
+        return False
 
 def cerrar_inventario(id_inv: str, usuario: str):
     """Close inventory"""
@@ -376,7 +415,7 @@ with tab1:
 
     st.divider()
 
-    if rol_actual != "Auditor":
+    if rol_actual not in ("Auditor", "admin"):
         st.info("Solo Auditores pueden generar inventarios.")
     else:
         st.subheader("Importar Excel → ABC → Muestra 80/15/5")
@@ -450,6 +489,9 @@ with tab1:
                 muestra["ID_Inventario"] = id_inv
                 ok_det = append_gspread_worksheet(SHEET_DET, muestra)
 
+                # Log actions
+                log_audit("generar_inventario", id_inv, len(muestra), "OK" if (ok_hist and ok_det) else "ERROR", f"hist_ok={ok_hist}, det_ok={ok_det}")
+
                 if ok_hist and ok_det:
                     st.success(f"✅ Inventario {id_inv} creado y detalle guardado ({len(muestra)} filas).")
                 elif ok_hist and not ok_det:
@@ -477,7 +519,7 @@ with tab1:
 with tab2:
     st.subheader("Carga de conteo físico")
 
-    if rol_actual != "Auditor":
+    if rol_actual not in ("Auditor", "admin"):
         st.info("Solo Auditores")
     else:
         df_abiertos = listar_inventarios_abiertos()
@@ -528,8 +570,11 @@ with tab2:
                     conteo_num = pd.to_numeric(df_merge["Conteo_Fisico"], errors="coerce").fillna(0)
                     df_merge["Diferencia"] = conteo_num - stock_num
 
-                    guardar_detalle_modificado(id_sel, df_merge)
-                    st.success("✅ Conteo guardado")
+                    ok = guardar_detalle_modificado(id_sel, df_merge)
+                    if ok:
+                        st.success("✅ Conteo guardado")
+                    else:
+                        st.error("Error al guardar conteo. Revisá Audit_Log o mensajes de error.")
                     st.rerun()
 
 # ----------------------------
@@ -554,7 +599,7 @@ with tab3:
             if df_dif.empty:
                 st.success("Sin diferencias")
             else:
-                if rol_actual == "Deposito":
+                if rol_actual in ("Deposito", "admin"):
                     st.write("**Ingresá justificaciones:**")
                     justificaciones_dict = {}
                     
@@ -579,8 +624,11 @@ with tab3:
                         for idx, just in justificaciones_dict.items():
                             df_det2.loc[df_det2.index == idx, "Justificacion"] = just
                         
-                        guardar_detalle_modificado(id_sel, df_det2)
-                        st.success("✅ Guardado")
+                        ok = guardar_detalle_modificado(id_sel, df_det2)
+                        if ok:
+                            st.success("✅ Guardado")
+                        else:
+                            st.error("Error al guardar justificaciones. Revisá Audit_Log.")
                         st.rerun()
                 else:
                     st.write("**Validá justificaciones:**")
@@ -611,8 +659,11 @@ with tab3:
                             df_det2.loc[df_det2.index == idx, "Validador"] = usuario_actual
                             df_det2.loc[df_det2.index == idx, "Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                         
-                        guardar_detalle_modificado(id_sel, df_det2)
-                        st.success("✅ Guardado")
+                        ok = guardar_detalle_modificado(id_sel, df_det2)
+                        if ok:
+                            st.success("✅ Guardado")
+                        else:
+                            st.error("Error al guardar validaciones. Revisá Audit_Log.")
                         st.rerun()
 
 # ----------------------------
@@ -620,8 +671,8 @@ with tab3:
 # ----------------------------
 with tab4:
     st.subheader("Cierre + Reporte")
-
-    if rol_actual != "Auditor":
+    
+    if rol_actual not in ("Auditor", "admin"):
         st.info("Solo Auditores")
     else:
         df_abiertos = listar_inventarios_abiertos()
