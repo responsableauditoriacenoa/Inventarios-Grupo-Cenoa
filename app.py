@@ -311,16 +311,28 @@ def cargar_detalle(id_inv: str) -> pd.DataFrame:
     return df[df["ID_Inventario"].astype(str) == str(id_inv)].copy()
 
 def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
-    """Calculate inventory results. Uses Ajuste_Cantidad if present, otherwise uses Diferencia."""
+    """Calculate inventory results based on Auditor adjustments.
+    - Uses only rows where Tipo_Ajuste = "Ajuste" (not "Canje" or "Sin Ajuste")
+    - Returns dict with results and list of canjes for separate display
+    """
     if df_det.empty:
-        return {}
+        return {"canjes": []}
     
     df_r = df_det.copy()
     stock_col = C_STOCK if C_STOCK in df_r.columns else None
     costo_col = C_COSTO if C_COSTO in df_r.columns else None
     
     if not stock_col or not costo_col:
-        return {}
+        return {"canjes": []}
+    
+    # Filter to include only "Ajuste" rows (exclude "Canje" and "Sin Ajuste")
+    if "Tipo_Ajuste" in df_r.columns:
+        mask_ajuste = df_r["Tipo_Ajuste"].astype(str) == "Ajuste"
+        df_r = df_r[mask_ajuste].copy()
+    
+    # If no adjustments, return empty results
+    if df_r.empty:
+        return {"canjes": []}
     
     df_r["_stock"] = pd.to_numeric(df_r[stock_col], errors="coerce").fillna(0)
     df_r["_costo"] = pd.to_numeric(df_r[costo_col], errors="coerce").fillna(0)
@@ -335,7 +347,7 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
     else:
         dif_col = "Diferencia"
         if dif_col not in df_r.columns:
-            return {}
+            return {"canjes": []}
         df_r["_dif"] = pd.to_numeric(df_r[dif_col], errors="coerce").fillna(0)
     
     cant_muestra = int(df_r["_stock"].sum())
@@ -364,6 +376,26 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
         if pct_absoluto >= th:
             grado = g
     
+    # Collect canjes (separate from adjustments)
+    if "Tipo_Ajuste" in df_det.columns:
+        df_canjes = df_det[df_det["Tipo_Ajuste"].astype(str) == "Canje"].copy()
+        canjes_list = []
+        if not df_canjes.empty:
+            for idx, row in df_canjes.iterrows():
+                art = row.get(C_ART, "")
+                loc = row.get(C_LOC, "")
+                costo = pd.to_numeric(row.get(C_COSTO, 0), errors="coerce")
+                ajuste_cant = pd.to_numeric(row.get("Ajuste_Cantidad", 0), errors="coerce")
+                canjes_list.append({
+                    "Artículo": art,
+                    "Locación": loc,
+                    "Cantidad": ajuste_cant,
+                    "Costo Unitario": costo,
+                    "Valor Total": ajuste_cant * costo
+                })
+    else:
+        canjes_list = []
+    
     return {
         "cant_muestra": cant_muestra,
         "valor_muestra": valor_muestra,
@@ -377,7 +409,8 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
         "valor_dif_absoluta": valor_dif_absoluta,
         "pct_absoluto": pct_absoluto,
         "grado": grado,
-        "escala": escala_sorted
+        "escala": escala_sorted,
+        "canjes": canjes_list
     }
 
 def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
@@ -822,6 +855,13 @@ with tab4:
                 ])
                 
                 st.dataframe(tabla_resultados, use_container_width=True, hide_index=True)
+                
+                # Mostrar resumen de canjes si existen
+                if resultados.get("canjes"):
+                    st.divider()
+                    st.write("### 🔄 Resumen de Canjes")
+                    df_canjes = pd.DataFrame(resultados["canjes"])
+                    st.dataframe(df_canjes, use_container_width=True, hide_index=True)
                 
                 st.divider()
                 st.write("### 📥 Descargar reporte:")
