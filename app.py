@@ -183,7 +183,78 @@ def log_audit(action: str, id_inv: str, filas: int, status: str, mensaje: str = 
             pass
 
 # ----------------------------
-# AUTH
+# EXPORT FUNCTIONS
+# ----------------------------
+def export_dataframe_to_excel(df: pd.DataFrame, sheet_name: str = "Datos", title: str = None) -> io.BytesIO:
+    """Export DataFrame to Excel with Argentine number formatting (. for thousands, , for decimals)"""
+    from openpyxl import Workbook
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.utils import get_column_letter
+    
+    buffer = io.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name[:31]  # Excel sheet name limit is 31 chars
+    
+    # Add title if provided
+    if title:
+        ws.merge_cells("A1:Z1")
+        ws["A1"] = title
+        ws["A1"].font = Font(size=12, bold=True)
+        ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+        start_row = 3
+    else:
+        start_row = 1
+    
+    # Track numeric columns for formatting
+    numeric_cols = {}
+    for col_idx, col_name in enumerate(df.columns, start=1):
+        # Try to detect numeric columns
+        try:
+            numeric_test = pd.to_numeric(df[col_name], errors="coerce")
+            if numeric_test.notna().sum() > 0:  # At least one numeric value
+                numeric_cols[col_idx] = col_name
+        except:
+            pass
+    
+    # Write DataFrame
+    for r_idx, row in enumerate(dataframe_to_rows(df, index=False, header=True), start=start_row):
+        for c_idx, value in enumerate(row, start=1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            if r_idx == start_row:
+                cell.font = Font(bold=True)
+            
+            # Apply numeric formatting if this column is numeric
+            if c_idx in numeric_cols:
+                try:
+                    num_val = float(value) if value not in (None, "", "NaN", "nan") else None
+                    if num_val is not None and str(num_val) not in ("nan", "inf", "-inf"):
+                        cell.value = num_val
+                        # Argentine format: #,##0.00 with . as thousands separator and , as decimal
+                        cell.number_format = '#,##0.00'
+                except:
+                    pass
+            
+            cell.alignment = Alignment(horizontal="left", vertical="center")
+    
+    # Auto-adjust column widths
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
 # ----------------------------
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against bcrypt hash"""
@@ -602,6 +673,20 @@ with tab1:
                 except Exception as e:
                     st.info(f"Chequeo detalle: error al leer hoja: {e}")
 
+                # Opción de descargar muestra generada
+                st.divider()
+                st.write("### 📥 Descargar muestra:")
+                cols_export = [C_ART, C_LOC, C_DESC, C_STOCK, C_COSTO, "Cat", "Concesionaria", "Sucursal"]
+                cols_export = [c for c in cols_export if c in muestra.columns]
+                df_export = muestra[cols_export].copy()
+                xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Muestra", title=f"Muestra Inventario {id_inv}")
+                st.download_button(
+                    "⬇️ Descargar Muestra Excel",
+                    data=xlsx_data,
+                    file_name=f"Muestra_{id_inv}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
                 # Refrescar vista (el usuario puede volver a abrir la pestaña o recargar)
                 st.rerun()
 
@@ -667,6 +752,21 @@ with tab2:
                         st.success("✅ Conteo guardado")
                     else:
                         st.error("Error al guardar conteo. Revisá Audit_Log o mensajes de error.")
+                    
+                    # Opción de descargar conteo
+                    st.divider()
+                    st.write("### 📥 Descargar conteo:")
+                    cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", C_COSTO]
+                    cols_export = [c for c in cols_export if c in df_merge.columns]
+                    df_export = df_merge[cols_export].copy()
+                    xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Conteo", title=f"Conteo Físico - {id_sel}")
+                    st.download_button(
+                        "⬇️ Descargar Conteo Excel",
+                        data=xlsx_data,
+                        file_name=f"Conteo_{id_sel}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                    
                     st.rerun()
 
 # ----------------------------
@@ -727,6 +827,19 @@ with tab3:
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
                             st.success("✅ Guardado")
+                            # Opción de descargar
+                            st.divider()
+                            st.write("### 📥 Descargar justificaciones:")
+                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", C_COSTO]
+                            cols_export = [c for c in cols_export if c in df_det2.columns]
+                            df_export = df_det2[cols_export].copy()
+                            xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Justificaciones", title=f"Justificaciones - {id_sel}")
+                            st.download_button(
+                                "⬇️ Descargar Justificaciones Excel",
+                                data=xlsx_data,
+                                file_name=f"Justificaciones_{id_sel}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
                         else:
                             st.error("Error al guardar justificaciones. Revisá Audit_Log.")
                         st.rerun()
@@ -800,6 +913,19 @@ with tab3:
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
                             st.success("✅ Guardado")
+                            # Opción de descargar
+                            st.divider()
+                            st.write("### 📥 Descargar validaciones y ajustes:")
+                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", C_COSTO]
+                            cols_export = [c for c in cols_export if c in df_det2.columns]
+                            df_export = df_det2[cols_export].copy()
+                            xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Validaciones", title=f"Validaciones y Ajustes - {id_sel}")
+                            st.download_button(
+                                "⬇️ Descargar Validaciones Excel",
+                                data=xlsx_data,
+                                file_name=f"Validaciones_{id_sel}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
                         else:
                             st.error("Error al guardar validaciones y ajustes. Revisá Audit_Log.")
                         st.rerun()
@@ -925,11 +1051,35 @@ with tab4:
                         ws[f"A{i}"] = r[0]
                         ws[f"B{i}"] = r[1]
                         ws[f"C{i}"] = r[2]
-                        ws[f"C{i}"].number_format = "#,##0.00"
+                        # Apply Argentine format: . for thousands, , for decimals
+                        ws[f"C{i}"].number_format = '#,##0.00'
 
                     ws2 = wb.create_sheet(title="Detalle")
-                    for r in dataframe_to_rows(df_det, index=False, header=True):
-                        ws2.append(r)
+                    # Detect numeric columns in detail sheet
+                    numeric_cols = {}
+                    for col_idx, col_name in enumerate(df_det.columns, start=1):
+                        try:
+                            numeric_test = pd.to_numeric(df_det[col_name], errors="coerce")
+                            if numeric_test.notna().sum() > 0:
+                                numeric_cols[col_idx] = col_name
+                        except:
+                            pass
+                    
+                    # Write detail sheet with formatting
+                    for r_idx, row in enumerate(dataframe_to_rows(df_det, index=False, header=True), start=1):
+                        for c_idx, value in enumerate(row, start=1):
+                            cell = ws2.cell(row=r_idx, column=c_idx, value=value)
+                            if r_idx == 1:
+                                cell.font = Font(bold=True)
+                            # Apply numeric formatting for numeric columns
+                            if c_idx in numeric_cols:
+                                try:
+                                    num_val = float(value) if value not in (None, "", "NaN", "nan") else None
+                                    if num_val is not None and str(num_val) not in ("nan", "inf", "-inf"):
+                                        cell.value = num_val
+                                        cell.number_format = '#,##0.00'
+                                except:
+                                    pass
 
                     wb.save(buffer)
                     buffer.seek(0)
