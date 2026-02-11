@@ -312,60 +312,79 @@ def cargar_detalle(id_inv: str) -> pd.DataFrame:
 
 def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
     """Calculate inventory results based on Auditor adjustments.
-    - Q: quantity (Stock for muestra, Ajuste_Cantidad for faltantes/sobrantes)
-    - $ Ajuste: valuation at cost = Costo_Rep * Q
-    - %: percentage of total muestra valuation
+    - Muestra Q & $ Ajuste: sum of ALL articles in sample (no filter)
+    - Faltantes/Sobrantes/etc: only rows where Tipo_Ajuste = "Ajuste"
+    - %: always over total muestra valuation
     """
     if df_det.empty:
         return {"canjes": []}
     
-    df_r = df_det.copy()
-    stock_col = C_STOCK if C_STOCK in df_r.columns else None
-    costo_col = C_COSTO if C_COSTO in df_r.columns else None
+    df_all = df_det.copy()
+    stock_col = C_STOCK if C_STOCK in df_all.columns else None
+    costo_col = C_COSTO if C_COSTO in df_all.columns else None
     
     if not stock_col or not costo_col:
         return {"canjes": []}
     
-    # Filter to include only "Ajuste" rows (exclude "Canje" and "Sin Ajuste")
+    df_all["_stock"] = pd.to_numeric(df_all[stock_col], errors="coerce").fillna(0)
+    df_all["_costo"] = pd.to_numeric(df_all[costo_col], errors="coerce").fillna(0)
+    
+    # MUESTRA: sum of ALL articles (no filter)
+    cant_muestra = int(df_all["_stock"].sum())
+    valor_muestra = (df_all["_stock"] * df_all["_costo"]).sum()
+    pct_muestra = 100.0
+    
+    # Now filter to ONLY "Ajuste" rows for difference calculations
+    df_r = df_all.copy()
     if "Tipo_Ajuste" in df_r.columns:
         mask_ajuste = df_r["Tipo_Ajuste"].astype(str) == "Ajuste"
         df_r = df_r[mask_ajuste].copy()
     
-    # If no adjustments, return empty results
+    # If no adjustments, return results with 0 differences
     if df_r.empty:
-        return {"canjes": []}
+        return {
+            "cant_muestra": cant_muestra,
+            "valor_muestra": valor_muestra,
+            "pct_muestra": pct_muestra,
+            "cant_faltantes": 0,
+            "valor_faltantes": 0,
+            "pct_faltantes": 0,
+            "cant_sobrantes": 0,
+            "valor_sobrantes": 0,
+            "pct_sobrantes": 0,
+            "cant_dif_neta": 0,
+            "valor_dif_neta": 0,
+            "pct_dif_neta": 0,
+            "cant_dif_absoluta": 0,
+            "valor_dif_absoluta": 0,
+            "pct_dif_absoluta": 0,
+            "pct_absoluto": 0,
+            "grado": 100,
+            "escala": [(0.00, 100), (0.10, 94), (0.80, 82), (1.60, 65), (2.40, 35), (3.30, 0)],
+            "canjes": []
+        }
     
-    df_r["_stock"] = pd.to_numeric(df_r[stock_col], errors="coerce").fillna(0)
-    df_r["_costo"] = pd.to_numeric(df_r[costo_col], errors="coerce").fillna(0)
     df_r["_ajuste"] = pd.to_numeric(df_r.get("Ajuste_Cantidad", 0), errors="coerce").fillna(0)
-    
-    # Q: Cantidades
-    cant_muestra = int(df_r["_stock"].sum())
     
     # Faltantes (negative adjustments)
     mask_falt = df_r["_ajuste"] < 0
     cant_faltantes = int((df_r.loc[mask_falt, "_ajuste"].abs()).sum())
+    valor_faltantes = (df_r.loc[mask_falt, "_ajuste"].abs() * df_r.loc[mask_falt, "_costo"]).sum()
+    pct_faltantes = (valor_faltantes / valor_muestra * 100) if valor_muestra > 0 else 0
     
     # Sobrantes (positive adjustments)
     mask_sobr = df_r["_ajuste"] > 0
     cant_sobrantes = int(df_r.loc[mask_sobr, "_ajuste"].sum())
+    valor_sobrantes = (df_r.loc[mask_sobr, "_ajuste"] * df_r.loc[mask_sobr, "_costo"]).sum()
+    pct_sobrantes = (valor_sobrantes / valor_muestra * 100) if valor_muestra > 0 else 0
     
     # Diferencia neta y absoluta
-    cant_dif_neta = int(df_r["_ajuste"].sum())  # Sobrantes - Faltantes
-    cant_dif_absoluta = int(df_r["_ajuste"].abs().sum())  # Faltantes + Sobrantes (abs)
-    
-    # $ Ajuste: Valuación a costo de reposición
-    valor_muestra = (df_r["_stock"] * df_r["_costo"]).sum()
-    valor_faltantes = (df_r.loc[mask_falt, "_ajuste"].abs() * df_r.loc[mask_falt, "_costo"]).sum()
-    valor_sobrantes = (df_r.loc[mask_sobr, "_ajuste"] * df_r.loc[mask_sobr, "_costo"]).sum()
+    cant_dif_neta = int(df_r["_ajuste"].sum())
     valor_dif_neta = (df_r["_ajuste"] * df_r["_costo"]).sum()
-    valor_dif_absoluta = (df_r["_ajuste"].abs() * df_r["_costo"]).sum()
-    
-    # % sobre total de muestra
-    pct_muestra = 100.0
-    pct_faltantes = (valor_faltantes / valor_muestra * 100) if valor_muestra > 0 else 0
-    pct_sobrantes = (valor_sobrantes / valor_muestra * 100) if valor_muestra > 0 else 0
     pct_dif_neta = (valor_dif_neta / valor_muestra * 100) if valor_muestra > 0 else 0
+    
+    cant_dif_absoluta = int(df_r["_ajuste"].abs().sum())
+    valor_dif_absoluta = (df_r["_ajuste"].abs() * df_r["_costo"]).sum()
     pct_dif_absoluta = (valor_dif_absoluta / valor_muestra * 100) if valor_muestra > 0 else 0
     
     # Escala de grado basada en % absoluto
@@ -378,9 +397,9 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
             grado = g
     
     # Collect canjes (separate from adjustments)
+    canjes_list = []
     if "Tipo_Ajuste" in df_det.columns:
         df_canjes = df_det[df_det["Tipo_Ajuste"].astype(str) == "Canje"].copy()
-        canjes_list = []
         if not df_canjes.empty:
             for idx, row in df_canjes.iterrows():
                 art = row.get(C_ART, "")
@@ -394,8 +413,6 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
                     "Costo Unitario": costo,
                     "Valor Total": ajuste_cant * costo
                 })
-    else:
-        canjes_list = []
     
     return {
         "cant_muestra": cant_muestra,
