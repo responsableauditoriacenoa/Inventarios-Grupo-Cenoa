@@ -4,9 +4,10 @@ import numpy as np
 import datetime
 import io
 import bcrypt
-import sqlite3
 import json
+import os
 from pathlib import Path
+from sqlalchemy import create_engine, text
 from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 
 # Version: 4.0 - SQLite persistent backend
@@ -16,8 +17,14 @@ from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 # ----------------------------
 st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wide", page_icon="📦")
 
-# SQLite DB (persistente en disco)
+# DB configurable: PostgreSQL/Supabase por DATABASE_URL, SQLite como fallback local
 DB_PATH = Path(__file__).resolve().parent / "inventarios.db"
+DATABASE_URL = (
+    os.getenv("DATABASE_URL")
+    or st.secrets.get("database", {}).get("url")
+    or f"sqlite:///{DB_PATH.as_posix()}"
+)
+DB_BACKEND = "SQLite" if DATABASE_URL.startswith("sqlite") else "Externa"
 
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
@@ -39,33 +46,43 @@ CONCESIONARIAS = {
 }
 
 # ----------------------------
-# SQLITE FUNCTIONS
+# DATABASE FUNCTIONS
 # ----------------------------
-def init_sqlite():
+@st.cache_resource
+def get_db_engine():
+    connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+    return create_engine(DATABASE_URL, future=True, connect_args=connect_args)
+
+def init_database():
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA synchronous=NORMAL")
-            conn.execute("""
+        engine = get_db_engine()
+        with engine.begin() as conn:
+            if DATABASE_URL.startswith("sqlite"):
+                conn.execute(text("PRAGMA journal_mode=WAL"))
+                conn.execute(text("PRAGMA synchronous=NORMAL"))
+            conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS worksheet_store (
                     name TEXT PRIMARY KEY,
                     data_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
-            """)
-            conn.commit()
+            """))
     except Exception as e:
-        st.error(f"Error inicializando SQLite: {e}")
+        st.error(f"Error inicializando base de datos: {e}")
         st.stop()
 
-init_sqlite()
+init_database()
 
 @st.cache_data(ttl=5)
 def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
-    """Read logical worksheet from SQLite."""
+    """Read logical worksheet from configured database."""
     try:
-        with sqlite3.connect(DB_PATH) as conn:
-            row = conn.execute("SELECT data_json FROM worksheet_store WHERE name = ?", (ws_name,)).fetchone()
+        engine = get_db_engine()
+        with engine.begin() as conn:
+            row = conn.execute(
+                text("SELECT data_json FROM worksheet_store WHERE name = :name"),
+                {"name": ws_name}
+            ).fetchone()
         if not row:
             return pd.DataFrame()
         data = json.loads(row[0]) if row[0] else []
@@ -75,7 +92,7 @@ def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
-    """Write logical worksheet to SQLite. Returns (ok: bool, message: str)."""
+    """Write logical worksheet to configured database. Returns (ok: bool, message: str)."""
     try:
         df = df.copy()
         for col in df.columns:
@@ -88,18 +105,13 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
         payload = json.dumps(df.to_dict(orient="records"), ensure_ascii=False, default=str)
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        with sqlite3.connect(DB_PATH) as conn:
+        engine = get_db_engine()
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM worksheet_store WHERE name = :name"), {"name": ws_name})
             conn.execute(
-                """
-                INSERT INTO worksheet_store(name, data_json, updated_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(name) DO UPDATE SET
-                    data_json = excluded.data_json,
-                    updated_at = excluded.updated_at
-                """,
-                (ws_name, payload, now)
+                text("INSERT INTO worksheet_store(name, data_json, updated_at) VALUES (:name, :data_json, :updated_at)"),
+                {"name": ws_name, "data_json": payload, "updated_at": now}
             )
-            conn.commit()
 
         try:
             st.cache_data.clear()
@@ -115,7 +127,7 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
         return False, user_msg
 
 def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
-    """Append rows to logical worksheet in SQLite."""
+    """Append rows to logical worksheet in configured database."""
     try:
         df_new = df_new.copy()
         for col in df_new.columns:
@@ -323,7 +335,7 @@ def _admin_debug_show():
         st.sidebar.error(f"Debug read error: {e}")
         return
 
-    with st.sidebar.expander("SQLite debug (admin)", expanded=False):
+    with st.sidebar.expander("Base de datos (admin)", expanded=False):
         st.write("**Historial_Inventarios**")
         st.write("Rows:", 0 if dfh is None else len(dfh))
         st.write("Columns:", list(dfh.columns) if not (dfh is None or dfh.empty) else [])
@@ -347,9 +359,11 @@ def _admin_debug_show():
 
 if usuario_actual == "admin":
     _admin_debug_show()
-    with st.sidebar.expander("Base de datos local", expanded=False):
-        st.write("Archivo SQLite:")
-        st.write(str(DB_PATH))
+    with st.sidebar.expander("Configuración BD", expanded=False):
+        st.write("Backend activo:")
+        st.write(DB_BACKEND)
+        st.write("Destino:")
+        st.write(str(DB_PATH) if DB_BACKEND == "SQLite" else "DATABASE_URL configurada")
 
 # ----------------------------
 # DATA FUNCTIONS

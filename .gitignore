@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 inventarios.db
+inventarios.db-wal
+inventarios.db-shm
