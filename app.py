@@ -426,13 +426,116 @@ def inject_modern_theme():
             font-size: 1.7rem !important;
         }
 
-        /* ─── DATAFRAMES ───────────────────────────────────── */
-        div[data-testid="stDataFrame"] {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 14px;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+        /* ─── DATAFRAMES / DATA EDITOR / TABLES ───────────── */
+        div[data-testid="stDataFrame"],
+        div[data-testid="stDataEditor"] {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 14px !important;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
             overflow: hidden;
+        }
+
+        /* Glide grid root used by st.dataframe / st.data_editor */
+        div[data-testid="stDataFrame"] [role="grid"],
+        div[data-testid="stDataEditor"] [role="grid"],
+        div[data-testid="stDataFrame"] .glideDataEditor,
+        div[data-testid="stDataEditor"] .glideDataEditor {
+            background: #ffffff !important;
+            color: #1e293b !important;
+        }
+
+        /* Header cells */
+        div[data-testid="stDataFrame"] [role="columnheader"],
+        div[data-testid="stDataEditor"] [role="columnheader"],
+        div[data-testid="stDataFrame"] .gdg-header,
+        div[data-testid="stDataEditor"] .gdg-header {
+            background: #f8fafc !important;
+            color: #334155 !important;
+            font-weight: 700 !important;
+            border-bottom: 1px solid #e2e8f0 !important;
+        }
+
+        /* Body cells */
+        div[data-testid="stDataFrame"] [role="gridcell"],
+        div[data-testid="stDataEditor"] [role="gridcell"],
+        div[data-testid="stDataFrame"] .gdg-cell,
+        div[data-testid="stDataEditor"] .gdg-cell {
+            background: #ffffff !important;
+            color: #1e293b !important;
+            border-color: #f1f5f9 !important;
+        }
+
+        /* Row hover / selection */
+        div[data-testid="stDataFrame"] [role="row"]:hover [role="gridcell"],
+        div[data-testid="stDataEditor"] [role="row"]:hover [role="gridcell"],
+        div[data-testid="stDataFrame"] [aria-selected="true"],
+        div[data-testid="stDataEditor"] [aria-selected="true"] {
+            background: #f8fafc !important;
+            color: #0f172a !important;
+        }
+
+        /* Data editor text inputs inside cells */
+        div[data-testid="stDataEditor"] input,
+        div[data-testid="stDataEditor"] textarea,
+        div[data-testid="stDataEditor"] [contenteditable="true"] {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            caret-color: #b91c1c !important;
+        }
+
+        /* Table markdown output (st.table / pandas html) */
+        .stTable table,
+        .stMarkdown table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: #ffffff;
+            color: #1e293b;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .stTable thead th,
+        .stMarkdown thead th {
+            background: #f8fafc;
+            color: #334155;
+            font-weight: 700;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .stTable th,
+        .stTable td,
+        .stMarkdown th,
+        .stMarkdown td {
+            padding: 0.55rem 0.75rem;
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+        }
+
+        .stTable tbody tr:hover td,
+        .stMarkdown tbody tr:hover td {
+            background: #f8fafc;
+        }
+
+        /* Scrollbar inside table widgets */
+        div[data-testid="stDataFrame"] *::-webkit-scrollbar,
+        div[data-testid="stDataEditor"] *::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        div[data-testid="stDataFrame"] *::-webkit-scrollbar-track,
+        div[data-testid="stDataEditor"] *::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        div[data-testid="stDataFrame"] *::-webkit-scrollbar-thumb,
+        div[data-testid="stDataEditor"] *::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 999px;
+            border: 2px solid #f1f5f9;
         }
 
         /* ─── EXPANDERS ────────────────────────────────────── */
