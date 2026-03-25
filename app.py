@@ -541,6 +541,86 @@ def cerrar_inventario(id_inv: str, usuario: str):
     ok, msg = write_gspread_worksheet(SHEET_HIST, df_hist)
     log_audit("cerrar_inventario", id_inv, 0, "OK" if ok else "ERROR", msg if msg else "Cerró inventario")
 
+def calcular_dashboard_kpis() -> dict:
+    df_hist = read_gspread_worksheet(SHEET_HIST)
+    df_det = read_gspread_worksheet(SHEET_DET)
+
+    if df_hist.empty:
+        return {
+            "inventarios_totales": 0,
+            "inventarios_abiertos": 0,
+            "inventarios_cerrados": 0,
+            "tasa_cierre": 0.0,
+            "lineas_muestreadas": 0,
+            "valuacion_muestra": 0.0,
+            "exactitud_promedio": 0.0,
+            "detalle_resumen": pd.DataFrame(),
+            "ranking_sucursales": pd.DataFrame(),
+        }
+
+    df_hist = df_hist.copy()
+    estados = df_hist.get("Estado", pd.Series(dtype=str)).astype(str).str.strip().str.lower()
+    inventarios_totales = len(df_hist)
+    inventarios_abiertos = int((estados == "abierto").sum())
+    inventarios_cerrados = int((estados == "cerrado").sum())
+    tasa_cierre = (inventarios_cerrados / inventarios_totales * 100) if inventarios_totales else 0.0
+
+    lineas_muestreadas = len(df_det) if not df_det.empty else 0
+    valuacion_muestra = 0.0
+    exactitudes = []
+    resumen_inventarios = []
+
+    if not df_det.empty and "ID_Inventario" in df_det.columns:
+        df_det = df_det.copy()
+        df_det["_stock"] = parse_ar_number(df_det.get(C_STOCK, pd.Series(dtype=object))).fillna(0)
+        df_det["_costo"] = parse_ar_number(df_det.get(C_COSTO, pd.Series(dtype=object))).fillna(0)
+        df_det["_diferencia"] = parse_ar_number(df_det.get("Diferencia", pd.Series(dtype=object))).fillna(0)
+        df_det["_valor_linea"] = df_det["_stock"] * df_det["_costo"]
+        valuacion_muestra = float(df_det["_valor_linea"].sum())
+
+        for id_inv, grupo in df_det.groupby("ID_Inventario"):
+            resultados = calcular_resultados_inventario(grupo.copy())
+            exactitudes.append(float(resultados.get("grado", 0)))
+            resumen_inventarios.append({
+                "ID_Inventario": id_inv,
+                "Sucursal": grupo.get("Sucursal", pd.Series([""])).iloc[0] if not grupo.empty else "",
+                "Líneas": len(grupo),
+                "Valuación": float((grupo["_stock"] * grupo["_costo"]).sum()),
+                "Líneas con diferencia": int((grupo["_diferencia"] != 0).sum()),
+                "Exactitud": float(resultados.get("grado", 0)),
+            })
+
+        detalle_resumen = pd.DataFrame(resumen_inventarios).sort_values(["Exactitud", "Valuación"], ascending=[True, False])
+
+        ranking_sucursales = (
+            pd.DataFrame(resumen_inventarios)
+            .groupby("Sucursal", dropna=False)
+            .agg(
+                Inventarios=("ID_Inventario", "count"),
+                Valuación=("Valuación", "sum"),
+                Exactitud_Promedio=("Exactitud", "mean"),
+            )
+            .reset_index()
+            .sort_values(["Exactitud_Promedio", "Valuación"], ascending=[True, False])
+        ) if resumen_inventarios else pd.DataFrame()
+    else:
+        detalle_resumen = pd.DataFrame()
+        ranking_sucursales = pd.DataFrame()
+
+    exactitud_promedio = float(np.mean(exactitudes)) if exactitudes else 0.0
+
+    return {
+        "inventarios_totales": inventarios_totales,
+        "inventarios_abiertos": inventarios_abiertos,
+        "inventarios_cerrados": inventarios_cerrados,
+        "tasa_cierre": tasa_cierre,
+        "lineas_muestreadas": lineas_muestreadas,
+        "valuacion_muestra": valuacion_muestra,
+        "exactitud_promedio": exactitud_promedio,
+        "detalle_resumen": detalle_resumen,
+        "ranking_sucursales": ranking_sucursales,
+    }
+
 # ----------------------------
 # UI
 # ----------------------------
@@ -558,6 +638,8 @@ with st.sidebar:
         st.session_state["modulo_activo"] = "justificaciones"
     if st.button("4) Cierre + Reporte", use_container_width=True):
         st.session_state["modulo_activo"] = "cierre"
+    if st.button("5) Dashboards", use_container_width=True):
+        st.session_state["modulo_activo"] = "dashboards"
 
     st.write("---")
     st.write(f"**👤 Logueado como:** {nombre_actual}")
@@ -1107,3 +1189,52 @@ elif modulo_activo == "cierre":
                     cerrar_inventario(id_sel, usuario_actual)
                     st.success("Cerrado")
                     st.rerun()
+
+# ----------------------------
+# MÓDULO 5
+# ----------------------------
+elif modulo_activo == "dashboards":
+    st.subheader("Dashboards")
+
+    kpis = calcular_dashboard_kpis()
+
+    fila1 = st.columns(4)
+    fila1[0].metric("Inventarios Totales", kpis["inventarios_totales"])
+    fila1[1].metric("Inventarios Abiertos", kpis["inventarios_abiertos"])
+    fila1[2].metric("Inventarios Cerrados", kpis["inventarios_cerrados"])
+    fila1[3].metric("Tasa de Cierre", f"{kpis['tasa_cierre']:.1f}%")
+
+    fila2 = st.columns(3)
+    fila2[0].metric("Líneas Muestreadas", kpis["lineas_muestreadas"])
+    fila2[1].metric("Valuación Auditada", f"$ {kpis['valuacion_muestra']:,.2f}")
+    fila2[2].metric("Exactitud Promedio", f"{kpis['exactitud_promedio']:.1f}%")
+
+    st.divider()
+    st.write("### 📋 KPIs incluidos")
+    st.dataframe(
+        pd.DataFrame([
+            {"KPI": "Inventarios Totales", "Descripción": "Cantidad total de inventarios generados en el sistema"},
+            {"KPI": "Inventarios Abiertos", "Descripción": "Inventarios aún pendientes de cierre"},
+            {"KPI": "Inventarios Cerrados", "Descripción": "Inventarios finalizados"},
+            {"KPI": "Tasa de Cierre", "Descripción": "Porcentaje de inventarios cerrados sobre el total"},
+            {"KPI": "Líneas Muestreadas", "Descripción": "Cantidad total de artículos incluidos en las muestras"},
+            {"KPI": "Valuación Auditada", "Descripción": "Suma de Stock x Costo de Reposición de todas las muestras"},
+            {"KPI": "Exactitud Promedio", "Descripción": "Promedio del grado de exactitud calculado en los inventarios"},
+        ]),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.divider()
+    st.write("### 🏢 Ranking de Sucursales")
+    if not kpis["ranking_sucursales"].empty:
+        st.dataframe(kpis["ranking_sucursales"], use_container_width=True, hide_index=True)
+    else:
+        st.info("Todavía no hay datos suficientes para mostrar ranking de sucursales.")
+
+    st.divider()
+    st.write("### 📦 Resumen por Inventario")
+    if not kpis["detalle_resumen"].empty:
+        st.dataframe(kpis["detalle_resumen"], use_container_width=True, hide_index=True)
+    else:
+        st.info("Todavía no hay inventarios con detalle para analizar.")
