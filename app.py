@@ -1,32 +1,23 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import gspread
 import datetime
 import io
 import bcrypt
+import sqlite3
+import json
+from pathlib import Path
 from usuarios_config import USUARIOS_CREDENCIALES, CREDENCIALES_INICIALES
 
-# Version: 3.0 - Complete rewrite with gspread client
-# Using gspread directly instead of st-gsheets-connection wrapper
+# Version: 4.0 - SQLite persistent backend
 
 # ----------------------------
 # CONFIG
 # ----------------------------
 st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wide", page_icon="📦")
 
-# Construir cliente gspread directamente desde st.secrets
-try:
-    gs_creds = st.secrets.get("connections", {}).get("gsheets")
-    if not gs_creds:
-        raise KeyError("connections.gsheets not found in secrets")
-    client = gspread.service_account_from_dict(gs_creds)
-except Exception as e:
-    st.error(f"Google Sheets credentials missing or invalid: {e}")
-    st.stop()
-
-# Spreadsheet ID (fijo)
-SPREADSHEET_ID = "1Dwn-uXcsT8CKFKwL0kZ4WyeVSwOGzXGcxMTW1W1bTe4"
+# SQLite DB (persistente en disco)
+DB_PATH = Path(__file__).resolve().parent / "inventarios.db"
 
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
@@ -48,71 +39,73 @@ CONCESIONARIAS = {
 }
 
 # ----------------------------
-# GSPREAD FUNCTIONS
+# SQLITE FUNCTIONS
 # ----------------------------
-@st.cache_resource
-def get_spreadsheet():
-    """Get spreadsheet by ID"""
-    return client.open_by_key(SPREADSHEET_ID)
-
-@st.cache_data(ttl=30)
-def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
-    """Read worksheet using gspread with short caching to avoid hitting API quotas.
-
-    Cached for 30s; writers will clear the cache after updates.
-    """
+def init_sqlite():
     try:
-        spreadsheet = get_spreadsheet()
-        worksheet = spreadsheet.worksheet(ws_name)
-        data = worksheet.get_all_records()
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS worksheet_store (
+                    name TEXT PRIMARY KEY,
+                    data_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            conn.commit()
+    except Exception as e:
+        st.error(f"Error inicializando SQLite: {e}")
+        st.stop()
+
+init_sqlite()
+
+@st.cache_data(ttl=5)
+def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
+    """Read logical worksheet from SQLite."""
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            row = conn.execute("SELECT data_json FROM worksheet_store WHERE name = ?", (ws_name,)).fetchone()
+        if not row:
+            return pd.DataFrame()
+        data = json.loads(row[0]) if row[0] else []
         return pd.DataFrame(data) if data else pd.DataFrame()
     except Exception as e:
-        # Detect quota errors and show a friendly message
-        msg = str(e)
-        if "RATE_LIMIT_EXCEEDED" in msg or "quota" in msg.lower() or "RESOURCE_EXHAUSTED" in msg:
-            st.error(f"Error reading {ws_name}: cuota de Google Sheets excedida. Esperá unos segundos y volvé a intentar.")
-        else:
-            st.error(f"Error reading {ws_name}: {msg}")
+        st.error(f"Error reading {ws_name}: {e}")
         return pd.DataFrame()
 
 def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
-    """Write worksheet using gspread. Returns (ok: bool, message: str)."""
+    """Write logical worksheet to SQLite. Returns (ok: bool, message: str)."""
     try:
-        # Convert Timestamp and other non-JSON-serializable types to strings
         df = df.copy()
         for col in df.columns:
             if pd.api.types.is_datetime64_any_dtype(df[col]):
                 df[col] = df[col].astype(str)
 
-        spreadsheet = get_spreadsheet()
-        try:
-            worksheet = spreadsheet.worksheet(ws_name)
-            worksheet.clear()
-        except Exception:
-            # Worksheet may not exist yet — create it with enough rows/cols
-            rows = max(100, len(df) + 5)
-            cols = max(10, len(df.columns))
-            worksheet = spreadsheet.add_worksheet(title=ws_name, rows=str(rows), cols=str(cols))
-
-        # Replace NaN/NaT and infinities so JSON serialization won't fail
         df = df.where(pd.notnull(df), "")
         df = df.replace([np.inf, -np.inf], "")
 
-        # Update data (header + rows)
-        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        payload = json.dumps(df.to_dict(orient="records"), ensure_ascii=False, default=str)
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Invalidate read cache so subsequent reads fetch fresh data
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO worksheet_store(name, data_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    data_json = excluded.data_json,
+                    updated_at = excluded.updated_at
+                """,
+                (ws_name, payload, now)
+            )
+            conn.commit()
+
         try:
             st.cache_data.clear()
         except Exception:
             pass
         return True, ""
     except Exception as e:
-        msg = str(e)
-        if "RATE_LIMIT_EXCEEDED" in msg or "quota" in msg.lower() or "RESOURCE_EXHAUSTED" in msg:
-            user_msg = f"Error writing {ws_name}: cuota de Google Sheets excedida. Intentá de nuevo más tarde."
-        else:
-            user_msg = f"Error writing {ws_name}: {msg}"
+        user_msg = f"Error writing {ws_name}: {e}"
         try:
             st.error(user_msg)
         except Exception:
@@ -120,41 +113,31 @@ def write_gspread_worksheet(ws_name: str, df: pd.DataFrame):
         return False, user_msg
 
 def append_gspread_worksheet(ws_name: str, df_new: pd.DataFrame):
-    """Append to worksheet with detailed logging"""
+    """Append rows to logical worksheet in SQLite."""
     try:
-        # Convert all non-string types to avoid JSON serialization issues
         df_new = df_new.copy()
         for col in df_new.columns:
             if pd.api.types.is_datetime64_any_dtype(df_new[col]):
                 df_new[col] = df_new[col].astype(str)
-            elif not pd.api.types.is_object_dtype(df_new[col]):
-                # Convert non-string types to strings
-                df_new[col] = df_new[col].astype(str)
-        
+
         df_exist = read_gspread_worksheet(ws_name)
         if df_exist.empty:
             ok, msg = write_gspread_worksheet(ws_name, df_new)
             if not ok:
                 st.error(f"Append failed writing new sheet {ws_name}: {msg}")
             return bool(ok)
-        
-        # Normalize columns between existing and new
+
         for col in df_exist.columns:
             if col not in df_new.columns:
                 df_new[col] = ""
         for col in df_new.columns:
             if col not in df_exist.columns:
                 df_exist[col] = ""
-        
+
         df_final = pd.concat([df_exist, df_new[df_exist.columns]], ignore_index=True)
         ok, msg = write_gspread_worksheet(ws_name, df_final)
         if not ok:
             st.error(f"Append failed updating {ws_name}: {msg}")
-        # Ensure cache invalidation after append
-        try:
-            st.cache_data.clear()
-        except Exception:
-            pass
         return bool(ok)
     except Exception as e:
         st.error(f"Error appending to {ws_name}: {str(e)}")
@@ -329,7 +312,7 @@ usuario_actual = st.session_state.get("usuario")
 nombre_actual = st.session_state.get("nombre_usuario")
 rol_actual = st.session_state.get("rol")
 
-# --- Admin debug: mostrar estado de las hojas (solo para admin)
+# --- Admin debug: mostrar estado de datos (solo para admin)
 def _admin_debug_show():
     try:
         dfh = read_gspread_worksheet(SHEET_HIST)
@@ -338,7 +321,7 @@ def _admin_debug_show():
         st.sidebar.error(f"Debug read error: {e}")
         return
 
-    with st.sidebar.expander("GSheets debug (admin)", expanded=False):
+    with st.sidebar.expander("SQLite debug (admin)", expanded=False):
         st.write("**Historial_Inventarios**")
         st.write("Rows:", 0 if dfh is None else len(dfh))
         st.write("Columns:", list(dfh.columns) if not (dfh is None or dfh.empty) else [])
@@ -362,15 +345,9 @@ def _admin_debug_show():
 
 if usuario_actual == "admin":
     _admin_debug_show()
-
-    # Mostrar email del service account en debug para facilitar verificación de permisos
-    try:
-        sa_email = st.secrets.get("connections", {}).get("gsheets", {}).get("client_email")
-        with st.sidebar.expander("Service Account info", expanded=False):
-            st.write("Service account:")
-            st.write(sa_email if sa_email else "(no encontrado en secrets)")
-    except Exception:
-        pass
+    with st.sidebar.expander("Base de datos local", expanded=False):
+        st.write("Archivo SQLite:")
+        st.write(str(DB_PATH))
 
 # ----------------------------
 # DATA FUNCTIONS
@@ -552,6 +529,20 @@ def cerrar_inventario(id_inv: str, usuario: str):
 # UI
 # ----------------------------
 with st.sidebar:
+    st.write("### 📌 Módulos")
+
+    if "modulo_activo" not in st.session_state:
+        st.session_state["modulo_activo"] = "nuevo"
+
+    if st.button("1) Nuevo inventario", use_container_width=True):
+        st.session_state["modulo_activo"] = "nuevo"
+    if st.button("2) Conteo físico", use_container_width=True):
+        st.session_state["modulo_activo"] = "conteo"
+    if st.button("3) Justificaciones", use_container_width=True):
+        st.session_state["modulo_activo"] = "justificaciones"
+    if st.button("4) Cierre + Reporte", use_container_width=True):
+        st.session_state["modulo_activo"] = "cierre"
+
     st.write("---")
     st.write(f"**👤 Logueado como:** {nombre_actual}")
     st.write(f"**🎯 Rol:** {rol_actual}")
@@ -562,18 +553,12 @@ with st.sidebar:
         st.rerun()
 
 st.title("📦 Inventarios Rotativos - Auditoría Interna (Grupo Cenoa)")
-
-tab1, tab2, tab3, tab4 = st.tabs([
-    "1) Nuevo inventario",
-    "2) Conteo físico (Auditor)",
-    "3) Justificaciones (Depósito / Auditor)",
-    "4) Cierre + Reporte"
-])
+modulo_activo = st.session_state.get("modulo_activo", "nuevo")
 
 # ----------------------------
-# TAB 1
+# MÓDULO 1
 # ----------------------------
-with tab1:
+if modulo_activo == "nuevo":
     st.subheader("Panel de control del Auditor")
 
     c1, c2 = st.columns(2)
@@ -697,9 +682,9 @@ with tab1:
                 st.rerun()
 
 # ----------------------------
-# TAB 2
+# MÓDULO 2
 # ----------------------------
-with tab2:
+elif modulo_activo == "conteo":
     st.subheader("Carga de conteo físico")
 
     if rol_actual not in ("Auditor", "admin"):
@@ -778,9 +763,9 @@ with tab2:
                         )
 
 # ----------------------------
-# TAB 3
+# MÓDULO 3
 # ----------------------------
-with tab3:
+elif modulo_activo == "justificaciones":
     st.subheader("Justificaciones")
 
     df_abiertos = listar_inventarios_abiertos()
@@ -939,9 +924,9 @@ with tab3:
                         st.rerun()
 
 # ----------------------------
-# TAB 4
+# MÓDULO 4
 # ----------------------------
-with tab4:
+elif modulo_activo == "cierre":
     st.subheader("Cierre + Reporte")
     
     if rol_actual not in ("Auditor", "admin"):
