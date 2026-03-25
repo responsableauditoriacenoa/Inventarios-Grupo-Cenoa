@@ -91,6 +91,15 @@ def inject_modern_theme():
 
         .stApp {
             background: #f1f5f9;
+            color-scheme: light;
+            --primary-color: #b91c1c;
+            --background-color: #f1f5f9;
+            --secondary-background-color: #ffffff;
+            --text-color: #0f172a;
+            --body-text-color: #1e293b;
+            --dataframe-header-background-color: #f8fafc;
+            --dataframe-border-color: #e2e8f0;
+            --dataframe-row-hover-color: #f1f5f9;
         }
 
         [data-testid="stAppViewContainer"] > .main {
@@ -434,6 +443,14 @@ def inject_modern_theme():
             border-radius: 14px !important;
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05) !important;
             overflow: hidden;
+            color-scheme: light;
+            --background-color: #ffffff;
+            --secondary-background-color: #ffffff;
+            --text-color: #0f172a;
+            --body-text-color: #1e293b;
+            --dataframe-header-background-color: #f8fafc;
+            --dataframe-border-color: #e2e8f0;
+            --dataframe-row-hover-color: #f1f5f9;
         }
 
         /* Glide grid root used by st.dataframe / st.data_editor */
