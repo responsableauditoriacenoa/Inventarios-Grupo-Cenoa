@@ -45,6 +45,258 @@ CONCESIONARIAS = {
     "Portico": ["Las Lomas", "Brown"],
 }
 
+MODULE_META = {
+    "nuevo": {
+        "label": "1) Nuevo inventario",
+        "icon": "📦",
+        "title": "Nuevo Inventario",
+        "description": "Importá el stock, generá la muestra ABC y creá un nuevo operativo de auditoría.",
+    },
+    "conteo": {
+        "label": "2) Conteo físico",
+        "icon": "🧮",
+        "title": "Conteo Físico",
+        "description": "Registrá el conteo del auditor y descargá la evidencia operativa en Excel.",
+    },
+    "justificaciones": {
+        "label": "3) Justificaciones",
+        "icon": "📝",
+        "title": "Justificaciones y Validación",
+        "description": "Gestioná diferencias, validaciones y decisiones de ajuste con trazabilidad.",
+    },
+    "cierre": {
+        "label": "4) Cierre + Reporte",
+        "icon": "✅",
+        "title": "Cierre y Reporte",
+        "description": "Consolidá resultados, evaluá exactitud y emití el reporte final del inventario.",
+    },
+    "dashboards": {
+        "label": "5) Dashboards",
+        "icon": "📊",
+        "title": "Dashboards Ejecutivos",
+        "description": "Visualizá KPIs clave, ranking de sucursales y desempeño general del proceso.",
+    },
+}
+
+def inject_modern_theme():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+        :root {
+            --bg-main: #f4efe7;
+            --bg-soft: #fffaf3;
+            --ink: #1d2433;
+            --muted: #596275;
+            --line: rgba(30, 40, 60, 0.10);
+            --brand: #b1442f;
+            --brand-deep: #7f2d1c;
+            --accent: #0f766e;
+            --card-shadow: 0 18px 60px rgba(35, 28, 24, 0.10);
+            --radius-lg: 24px;
+            --radius-md: 18px;
+        }
+
+        html, body, [class*="css"]  {
+            font-family: 'IBM Plex Sans', sans-serif;
+            color: var(--ink);
+        }
+
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(177, 68, 47, 0.16), transparent 28%),
+                radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 24%),
+                linear-gradient(180deg, #f7f2eb 0%, #f4efe7 100%);
+        }
+
+        [data-testid="stAppViewContainer"] > .main {
+            background: transparent;
+        }
+
+        .block-container {
+            padding-top: 1.4rem;
+            padding-bottom: 2rem;
+            max-width: 1400px;
+        }
+
+        [data-testid="stSidebar"] {
+            background:
+                linear-gradient(180deg, rgba(23, 27, 37, 0.97) 0%, rgba(35, 42, 54, 0.98) 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        [data-testid="stSidebar"] * {
+            color: #f7f1ea;
+        }
+
+        .brand-shell {
+            padding: 1rem 1rem 1.1rem 1rem;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 22px;
+            background: linear-gradient(135deg, rgba(177,68,47,0.30), rgba(15,118,110,0.18));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+            margin-bottom: 1rem;
+        }
+
+        .brand-kicker {
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            opacity: 0.85;
+        }
+
+        .brand-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-top: 0.3rem;
+            line-height: 1.1;
+        }
+
+        .hero-card {
+            background: linear-gradient(135deg, rgba(255,250,243,0.90), rgba(255,255,255,0.68));
+            border: 1px solid rgba(255,255,255,0.65);
+            border-radius: 28px;
+            padding: 1.4rem 1.5rem;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(10px);
+            margin-bottom: 1.2rem;
+        }
+
+        .hero-kicker {
+            color: var(--brand);
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-bottom: 0.55rem;
+        }
+
+        .hero-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.25rem;
+            line-height: 1.02;
+            font-weight: 700;
+            margin: 0;
+            color: var(--ink);
+        }
+
+        .hero-desc {
+            margin-top: 0.65rem;
+            color: var(--muted);
+            font-size: 1rem;
+            max-width: 860px;
+        }
+
+        .hero-meta {
+            display: flex;
+            gap: 0.65rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .hero-pill {
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.8);
+            border: 1px solid rgba(30,40,60,0.08);
+            font-size: 0.88rem;
+            color: var(--ink);
+        }
+
+        div[data-testid="stButton"] > button,
+        div[data-testid="stDownloadButton"] > button {
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.10);
+            background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+            color: inherit;
+            font-weight: 600;
+            padding-top: 0.65rem;
+            padding-bottom: 0.65rem;
+            transition: all 0.18s ease;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+        }
+
+        [data-testid="stSidebar"] div[data-testid="stButton"] > button {
+            text-align: left;
+            background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+        }
+
+        div[data-testid="stButton"] > button:hover,
+        div[data-testid="stDownloadButton"] > button:hover {
+            transform: translateY(-1px);
+            border-color: rgba(177,68,47,0.55);
+            box-shadow: 0 14px 30px rgba(127, 45, 28, 0.14);
+        }
+
+        div[data-testid="stMetric"] {
+            background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,250,243,0.86));
+            border: 1px solid rgba(30,40,60,0.08);
+            border-radius: 22px;
+            padding: 0.9rem 1rem;
+            box-shadow: var(--card-shadow);
+        }
+
+        div[data-testid="stMetric"] label,
+        div[data-testid="stMetricValue"] {
+            color: var(--ink);
+        }
+
+        div[data-testid="stDataFrame"],
+        div[data-testid="stExpander"] {
+            background: rgba(255,255,255,0.72);
+            border-radius: 20px;
+            border: 1px solid rgba(30,40,60,0.08);
+            box-shadow: var(--card-shadow);
+            overflow: hidden;
+        }
+
+        [data-baseweb="select"] > div,
+        div[data-testid="stTextInputRootElement"] > div,
+        div[data-testid="stNumberInputContainer"] {
+            border-radius: 16px !important;
+            background: rgba(255,255,255,0.88) !important;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--ink);
+            letter-spacing: -0.02em;
+        }
+
+        @media (max-width: 900px) {
+            .hero-title {
+                font-size: 1.7rem;
+            }
+
+            .block-container {
+                padding-top: 1rem;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_page_header(active_module: str, usuario: str, rol: str):
+    meta = MODULE_META.get(active_module, MODULE_META["nuevo"])
+    st.markdown(
+        f"""
+        <div class="hero-card">
+            <div class="hero-kicker">Inventarios Rotativos · Grupo Cenoa</div>
+            <h1 class="hero-title">{meta['icon']} {meta['title']}</h1>
+            <div class="hero-desc">{meta['description']}</div>
+            <div class="hero-meta">
+                <span class="hero-pill">Usuario: {usuario}</span>
+                <span class="hero-pill">Rol: {rol}</span>
+                <span class="hero-pill">Backend: {DB_BACKEND}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # ----------------------------
 # DATABASE FUNCTIONS
 # ----------------------------
@@ -321,6 +573,8 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     login()
     st.stop()
+
+inject_modern_theme()
 
 usuario_actual = st.session_state.get("usuario")
 nombre_actual = st.session_state.get("nombre_usuario")
@@ -625,20 +879,29 @@ def calcular_dashboard_kpis() -> dict:
 # UI
 # ----------------------------
 with st.sidebar:
+    st.markdown(
+        """
+        <div class="brand-shell">
+            <div class="brand-kicker">Auditoría Interna</div>
+            <div class="brand-title">Inventarios Rotativos<br/>Grupo Cenoa</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.write("### 📌 Módulos")
 
     if "modulo_activo" not in st.session_state:
         st.session_state["modulo_activo"] = "nuevo"
 
-    if st.button("1) Nuevo inventario", use_container_width=True):
+    if st.button(f"{MODULE_META['nuevo']['icon']}  {MODULE_META['nuevo']['label']}", use_container_width=True):
         st.session_state["modulo_activo"] = "nuevo"
-    if st.button("2) Conteo físico", use_container_width=True):
+    if st.button(f"{MODULE_META['conteo']['icon']}  {MODULE_META['conteo']['label']}", use_container_width=True):
         st.session_state["modulo_activo"] = "conteo"
-    if st.button("3) Justificaciones", use_container_width=True):
+    if st.button(f"{MODULE_META['justificaciones']['icon']}  {MODULE_META['justificaciones']['label']}", use_container_width=True):
         st.session_state["modulo_activo"] = "justificaciones"
-    if st.button("4) Cierre + Reporte", use_container_width=True):
+    if st.button(f"{MODULE_META['cierre']['icon']}  {MODULE_META['cierre']['label']}", use_container_width=True):
         st.session_state["modulo_activo"] = "cierre"
-    if st.button("5) Dashboards", use_container_width=True):
+    if st.button(f"{MODULE_META['dashboards']['icon']}  {MODULE_META['dashboards']['label']}", use_container_width=True):
         st.session_state["modulo_activo"] = "dashboards"
 
     st.write("---")
@@ -650,8 +913,8 @@ with st.sidebar:
         st.session_state.clear()
         st.rerun()
 
-st.title("📦 Inventarios Rotativos - Auditoría Interna (Grupo Cenoa)")
 modulo_activo = st.session_state.get("modulo_activo", "nuevo")
+render_page_header(modulo_activo, nombre_actual, rol_actual)
 
 # ----------------------------
 # MÓDULO 1
