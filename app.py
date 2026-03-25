@@ -262,7 +262,7 @@ def inject_modern_theme():
             transform: translateY(-1px);
         }
 
-        /* ─── INPUTS ───────────────────────────────────────── */
+        /* ─── INPUTS (text, number) ───────────────────────── */
         [data-baseweb="select"] > div,
         div[data-testid="stTextInputRootElement"] > div,
         div[data-testid="stNumberInputContainer"] {
@@ -273,6 +273,133 @@ def inject_modern_theme():
 
         input, textarea, select {
             color: #0f172a !important;
+            background: #ffffff !important;
+        }
+
+        /* Selected value shown in selectbox trigger */
+        [data-baseweb="select"] [data-baseweb="tag"],
+        [data-baseweb="select"] span,
+        [data-baseweb="select"] div {
+            color: #0f172a !important;
+            background-color: transparent;
+        }
+
+        /* Multiselect tags (pills inside input) */
+        [data-baseweb="tag"] {
+            background-color: #e2e8f0 !important;
+            border: 1px solid #cbd5e1 !important;
+            border-radius: 6px !important;
+            color: #1e293b !important;
+        }
+
+        [data-baseweb="tag"] span,
+        [data-baseweb="tag"] div {
+            color: #1e293b !important;
+        }
+
+        /* ─── DROPDOWN / SELECT POPUP ─────────────────────── */
+        /* The floating popup card */
+        [data-baseweb="popover"],
+        [data-baseweb="popover"] > div,
+        [data-baseweb="menu"] {
+            background-color: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 12px !important;
+            box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12) !important;
+        }
+
+        /* Dropdown list container */
+        ul[data-baseweb="menu"],
+        [data-baseweb="menu"] ul {
+            background-color: #ffffff !important;
+            padding: 4px !important;
+        }
+
+        /* Each dropdown option */
+        li[role="option"],
+        [role="option"] {
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            border-radius: 8px !important;
+        }
+
+        li[role="option"]:hover,
+        [role="option"]:hover,
+        li[role="option"][aria-selected="true"],
+        [role="option"][aria-selected="true"] {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+        }
+
+        /* Option text */
+        li[role="option"] span,
+        li[role="option"] div,
+        [role="option"] span,
+        [role="option"] div {
+            color: #1e293b !important;
+        }
+
+        /* No-results / empty state text */
+        [data-baseweb="menu"] [data-testid="stSelectboxVirtualDropdown"] p,
+        [data-baseweb="menu"] p {
+            color: #64748b !important;
+        }
+
+        /* ─── CHECKBOX & RADIO ────────────────────────────── */
+        [data-baseweb="checkbox"] label,
+        [data-baseweb="radio"] label {
+            color: #1e293b !important;
+        }
+
+        /* ─── SLIDER ──────────────────────────────────────── */
+        [data-testid="stSlider"] > div > div > div {
+            background: #e2e8f0 !important;
+        }
+
+        /* ─── TABS ────────────────────────────────────────── */
+        [data-baseweb="tab-list"] {
+            background: #f1f5f9 !important;
+            border-radius: 10px;
+        }
+
+        [data-baseweb="tab"] {
+            color: #64748b !important;
+            background: transparent !important;
+        }
+
+        [data-baseweb="tab"][aria-selected="true"] {
+            color: #0f172a !important;
+            background: #ffffff !important;
+            border-radius: 8px;
+        }
+
+        [data-baseweb="tab-highlight"] {
+            background: #b91c1c !important;
+        }
+
+        /* ─── TOOLTIP ─────────────────────────────────────── */
+        [data-baseweb="tooltip"],
+        [data-baseweb="tooltip"] div {
+            background-color: #0f172a !important;
+            color: #f1f5f9 !important;
+            border-radius: 8px !important;
+        }
+
+        /* ─── DATE / TIME PICKER POPUP ────────────────────── */
+        [data-baseweb="calendar"],
+        [data-baseweb="datepicker"],
+        [data-baseweb="time-picker"] {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 14px !important;
+            box-shadow: 0 8px 30px rgba(15, 23, 42, 0.12) !important;
+            color: #1e293b !important;
+        }
+
+        [data-baseweb="calendar"] button,
+        [data-baseweb="calendar"] div,
+        [data-baseweb="calendar"] span {
+            color: #1e293b !important;
         }
 
         /* ─── METRIC CARDS ─────────────────────────────────── */
@@ -299,11 +426,19 @@ def inject_modern_theme():
             font-size: 1.7rem !important;
         }
 
-        /* ─── DATAFRAMES & EXPANDERS ───────────────────────── */
-        div[data-testid="stDataFrame"],
-        div[data-testid="stExpander"] {
+        /* ─── DATAFRAMES ───────────────────────────────────── */
+        div[data-testid="stDataFrame"] {
             background: #ffffff;
             border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+        }
+
+        /* ─── EXPANDERS ────────────────────────────────────── */
+        div[data-testid="stExpander"] {
+            background: #ffffff;
+            border: 1px solid #e2e8f0 !important;
             border-radius: 14px;
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
             overflow: hidden;
@@ -312,19 +447,55 @@ def inject_modern_theme():
         div[data-testid="stExpander"] summary {
             color: #0f172a !important;
             font-weight: 600;
+            background: #ffffff !important;
+        }
+
+        div[data-testid="stExpander"] > div > div {
+            background: #ffffff !important;
+            color: #1e293b !important;
         }
 
         /* ─── FILE UPLOADER ────────────────────────────────── */
         div[data-testid="stFileUploader"] {
-            border-radius: 14px;
-            border: 2px dashed #cbd5e1 !important;
             background: #ffffff !important;
+            border-radius: 14px;
+        }
+
+        div[data-testid="stFileUploaderDropzone"],
+        section[data-testid="stFileUploaderDropzone"] {
+            background: #f8fafc !important;
+            border: 2px dashed #cbd5e1 !important;
+            border-radius: 12px !important;
+        }
+
+        div[data-testid="stFileUploaderDropzoneInstructions"],
+        div[data-testid="stFileUploaderDropzone"] > div {
+            background: transparent !important;
+        }
+
+        div[data-testid="stFileUploaderDropzoneInstructions"] span,
+        div[data-testid="stFileUploaderDropzoneInstructions"] p,
+        div[data-testid="stFileUploaderDropzoneInstructions"] small,
+        div[data-testid="stFileUploaderDropzone"] span,
+        div[data-testid="stFileUploaderDropzone"] p,
+        div[data-testid="stFileUploaderDropzone"] small {
+            color: #64748b !important;
         }
 
         div[data-testid="stFileUploader"] label,
         div[data-testid="stFileUploader"] span,
-        div[data-testid="stFileUploader"] p {
+        div[data-testid="stFileUploader"] p,
+        div[data-testid="stFileUploader"] small {
             color: #334155 !important;
+        }
+
+        /* Browse files button inside uploader */
+        div[data-testid="stFileUploader"] button,
+        div[data-testid="stFileUploaderDropzone"] button {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            border: 1.5px solid #e2e8f0 !important;
+            border-radius: 8px !important;
         }
 
         /* ─── ALERTS ───────────────────────────────────────── */
@@ -344,6 +515,40 @@ def inject_modern_theme():
             border-bottom: 2px solid #e2e8f0;
             padding-bottom: 0.35rem;
             margin-top: 1.2rem;
+        }
+
+        /* ─── MODAL / DIALOG ──────────────────────────────── */
+        [data-testid="stModal"] > div,
+        [data-testid="stDialog"] > div {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            border-radius: 18px !important;
+        }
+
+        /* ─── PROGRESS BAR ────────────────────────────────── */
+        [data-testid="stProgress"] > div > div {
+            background: #b91c1c !important;
+        }
+
+        [data-testid="stProgress"] > div {
+            background: #e2e8f0 !important;
+            border-radius: 999px !important;
+        }
+
+        /* ─── SIDEBAR EXPANDERS ───────────────────────────── */
+        [data-testid="stSidebar"] div[data-testid="stExpander"] {
+            background: rgba(255, 255, 255, 0.05) !important;
+            border-color: rgba(255, 255, 255, 0.10) !important;
+        }
+
+        [data-testid="stSidebar"] div[data-testid="stExpander"] summary {
+            color: #cbd5e1 !important;
+            background: transparent !important;
+        }
+
+        [data-testid="stSidebar"] div[data-testid="stExpander"] > div > div {
+            background: transparent !important;
+            color: #94a3b8 !important;
         }
 
         @media (max-width: 900px) {
