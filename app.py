@@ -908,6 +908,7 @@ def export_dataframe_to_excel(df: pd.DataFrame, sheet_name: str = "Datos", title
 def parse_ar_number(series: pd.Series) -> pd.Series:
     """Parse numbers that may use Argentine formatting (1.234,56)."""
     s = series.astype(str).str.strip()
+    s = s.str.replace("$", "", regex=False).str.replace("ARS", "", regex=False).str.strip()
     has_comma = s.str.contains(",", regex=False)
     s = s.where(~has_comma, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
     return pd.to_numeric(s, errors="coerce")
@@ -954,14 +955,17 @@ def buscar_articulo_en_base(id_inv: str, codigo_articulo: str) -> dict | None:
         return None
 
     descripcion = matches[C_DESC].dropna().astype(str).iloc[0] if C_DESC in matches.columns and matches[C_DESC].notna().any() else ""
-    costo = parse_ar_number(matches[C_COSTO]).dropna().iloc[0] if C_COSTO in matches.columns and parse_ar_number(matches[C_COSTO]).notna().any() else 0.0
+    costo_series = parse_ar_number(matches[C_COSTO]) if C_COSTO in matches.columns else pd.Series(dtype=float)
+    costo = costo_series.dropna().iloc[0] if not costo_series.dropna().empty else 0.0
     stock_total = parse_ar_number(matches[C_STOCK]).fillna(0).sum() if C_STOCK in matches.columns else 0.0
+    locaciones = ", ".join(matches[C_LOC].dropna().astype(str).unique().tolist()) if C_LOC in matches.columns else ""
 
     return {
         "codigo": codigo,
         "descripcion": descripcion,
         "costo": float(costo) if pd.notna(costo) else 0.0,
         "stock": float(stock_total),
+        "locacion": locaciones,
     }
 
 def is_currency_column(col_name: str) -> bool:
@@ -1323,7 +1327,7 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
             "escala": [(0.00, 100), (0.10, 94), (0.80, 82), (1.60, 65), (2.40, 35), (3.30, 0)],
             "canjes": []
         }
-    
+
     ajuste_source = df_r["Ajuste_Cantidad"] if "Ajuste_Cantidad" in df_r.columns else pd.Series(0, index=df_r.index)
     df_r["_ajuste"] = pd.to_numeric(ajuste_source, errors="coerce").fillna(0)
     
@@ -1363,20 +1367,30 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
         df_canjes = df_det[df_det["Tipo_Ajuste"].astype(str) == "Canje"].copy()
         if not df_canjes.empty:
             for idx, row in df_canjes.iterrows():
-                art = row.get("Canje_Articulo", "") or row.get(C_ART, "")
-                descripcion = row.get("Canje_Descripcion", "")
-                loc = row.get(C_LOC, "")
-                costo = pd.to_numeric(row.get("Canje_Costo_Rep", row.get(C_COSTO, 0)), errors="coerce")
-                stock_base = pd.to_numeric(row.get("Canje_Stock_Base", 0), errors="coerce")
-                ajuste_cant = pd.to_numeric(row.get("Canje_Ajuste_Cantidad", row.get("Ajuste_Cantidad", 0)), errors="coerce")
+                costo_original = pd.to_numeric(row.get(C_COSTO, 0), errors="coerce")
+                ajuste_original = pd.to_numeric(row.get("Ajuste_Cantidad", 0), errors="coerce")
                 canjes_list.append({
-                    "Artículo": art,
-                    "Descripción": descripcion,
-                    "Locación": loc,
-                    "Stock Base": stock_base,
-                    "Cantidad": ajuste_cant,
-                    "Costo Unitario": costo,
-                    "Valor Total": ajuste_cant * costo
+                    "Tipo Movimiento": "Artículo original",
+                    "Artículo": row.get(C_ART, ""),
+                    "Descripción": row.get(C_DESC, ""),
+                    "Locación": row.get(C_LOC, ""),
+                    "Stock Base": parse_ar_number(pd.Series([row.get(C_STOCK, 0)])).fillna(0).iloc[0],
+                    "Cantidad": ajuste_original,
+                    "Costo Unitario": costo_original,
+                    "Valor Total": ajuste_original * costo_original
+                })
+
+                costo_canje = pd.to_numeric(row.get("Canje_Costo_Rep", row.get(C_COSTO, 0)), errors="coerce")
+                ajuste_canje = pd.to_numeric(row.get("Canje_Ajuste_Cantidad", row.get("Ajuste_Cantidad", 0)), errors="coerce")
+                canjes_list.append({
+                    "Tipo Movimiento": "Artículo de canje",
+                    "Artículo": row.get("Canje_Articulo", "") or row.get(C_ART, ""),
+                    "Descripción": row.get("Canje_Descripcion", ""),
+                    "Locación": row.get("Canje_Locacion", row.get(C_LOC, "")),
+                    "Stock Base": pd.to_numeric(row.get("Canje_Stock_Base", 0), errors="coerce"),
+                    "Cantidad": ajuste_canje,
+                    "Costo Unitario": costo_canje,
+                    "Valor Total": ajuste_canje * costo_canje
                 })
     
     return {
@@ -1951,12 +1965,14 @@ elif modulo_activo == "justificaciones":
                                     df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = canje_info["descripcion"]
                                     df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = canje_info["costo"]
                                     df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = canje_info["stock"]
+                                    df_det2.loc[df_det2.index == idx, "Canje_Locacion"] = canje_info["locacion"]
                                     df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad"] = -float(cantidad)
                                 else:
                                     df_det2.loc[df_det2.index == idx, "Canje_Articulo"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = ""
+                                    df_det2.loc[df_det2.index == idx, "Canje_Locacion"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad"] = ""
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
@@ -1965,7 +1981,7 @@ elif modulo_activo == "justificaciones":
                             # Opción de descargar
                             st.divider()
                             st.write("### 📥 Descargar validaciones y ajustes:")
-                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", "Canje_Articulo", "Canje_Descripcion", "Canje_Costo_Rep", "Canje_Stock_Base", "Canje_Ajuste_Cantidad", C_COSTO]
+                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", "Canje_Articulo", "Canje_Descripcion", "Canje_Locacion", "Canje_Costo_Rep", "Canje_Stock_Base", "Canje_Ajuste_Cantidad", C_COSTO]
                             cols_export = [c for c in cols_export if c in df_det2.columns]
                             df_export = df_det2[cols_export].copy()
                             xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Validaciones", title=f"Validaciones y Ajustes - {id_sel}")
