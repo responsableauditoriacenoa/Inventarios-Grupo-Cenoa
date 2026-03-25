@@ -82,32 +82,15 @@ def inject_modern_theme():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
-        :root {
-            --bg-main: #f4efe7;
-            --bg-soft: #fffaf3;
-            --ink: #1d2433;
-            --muted: #596275;
-            --line: rgba(30, 40, 60, 0.10);
-            --brand: #b1442f;
-            --brand-deep: #7f2d1c;
-            --accent: #0f766e;
-            --card-shadow: 0 18px 60px rgba(35, 28, 24, 0.10);
-            --radius-lg: 24px;
-            --radius-md: 18px;
-        }
-
-        html, body, [class*="css"]  {
-            font-family: 'IBM Plex Sans', sans-serif;
-            color: var(--ink);
+        /* ─── BASE ─────────────────────────────────────────── */
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
         }
 
         .stApp {
-            background:
-                radial-gradient(circle at top left, rgba(177, 68, 47, 0.16), transparent 28%),
-                radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 24%),
-                linear-gradient(180deg, #f7f2eb 0%, #f4efe7 100%);
+            background: #f1f5f9;
         }
 
         [data-testid="stAppViewContainer"] > .main {
@@ -115,164 +98,257 @@ def inject_modern_theme():
         }
 
         .block-container {
-            padding-top: 1.4rem;
-            padding-bottom: 2rem;
+            padding-top: 1.5rem;
+            padding-bottom: 2.5rem;
             max-width: 1400px;
         }
 
+        /* ─── TYPOGRAPHY ───────────────────────────────────── */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Space Grotesk', sans-serif !important;
+            color: #0f172a !important;
+            letter-spacing: -0.02em;
+            font-weight: 700;
+        }
+
+        p, li, span, div, label {
+            color: #1e293b;
+        }
+
+        .stMarkdown p {
+            color: #334155;
+        }
+
+        /* ─── SIDEBAR ──────────────────────────────────────── */
         [data-testid="stSidebar"] {
-            background:
-                linear-gradient(180deg, rgba(23, 27, 37, 0.97) 0%, rgba(35, 42, 54, 0.98) 100%);
-            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        [data-testid="stSidebar"] * {
-            color: #f7f1ea;
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] div,
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] small,
+        [data-testid="stSidebar"] a {
+            color: #cbd5e1 !important;
         }
 
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            color: #f1f5f9 !important;
+        }
+
+        /* ─── BRAND BLOCK ──────────────────────────────────── */
         .brand-shell {
-            padding: 1rem 1rem 1.1rem 1rem;
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 22px;
-            background: linear-gradient(135deg, rgba(177,68,47,0.30), rgba(15,118,110,0.18));
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+            padding: 0.9rem 1rem 1rem 1rem;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(185, 28, 28, 0.32) 0%, rgba(13, 148, 136, 0.18) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             margin-bottom: 1rem;
         }
 
         .brand-kicker {
-            font-size: 0.78rem;
+            font-size: 0.68rem;
+            font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.12em;
-            opacity: 0.85;
+            letter-spacing: 0.14em;
+            color: #94a3b8 !important;
         }
 
         .brand-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 700;
+            color: #f1f5f9 !important;
+            line-height: 1.25;
             margin-top: 0.3rem;
-            line-height: 1.1;
         }
 
+        /* ─── SIDEBAR BUTTONS ──────────────────────────────── */
+        [data-testid="stSidebar"] div[data-testid="stButton"] > button {
+            width: 100%;
+            text-align: left !important;
+            background: rgba(255, 255, 255, 0.05) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 12px !important;
+            color: #e2e8f0 !important;
+            font-weight: 500;
+            font-size: 0.9rem;
+            padding: 0.6rem 0.9rem !important;
+            box-shadow: none !important;
+            transition: all 0.15s ease;
+            margin-bottom: 2px;
+        }
+
+        [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
+            background: rgba(185, 28, 28, 0.22) !important;
+            border-color: rgba(185, 28, 28, 0.45) !important;
+            color: #ffffff !important;
+            transform: none;
+        }
+
+        /* ─── HERO CARD ────────────────────────────────────── */
         .hero-card {
-            background: linear-gradient(135deg, rgba(255,250,243,0.90), rgba(255,255,255,0.68));
-            border: 1px solid rgba(255,255,255,0.65);
-            border-radius: 28px;
-            padding: 1.4rem 1.5rem;
-            box-shadow: var(--card-shadow);
-            backdrop-filter: blur(10px);
-            margin-bottom: 1.2rem;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 1.4rem 1.75rem;
+            box-shadow: 0 2px 16px rgba(15, 23, 42, 0.07);
+            margin-bottom: 1.5rem;
         }
 
         .hero-kicker {
-            color: var(--brand);
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 700;
-            margin-bottom: 0.55rem;
+            text-transform: uppercase;
+            letter-spacing: 0.13em;
+            color: #b91c1c !important;
+            margin-bottom: 0.5rem;
         }
 
         .hero-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 2.25rem;
-            line-height: 1.02;
+            font-size: 2rem;
             font-weight: 700;
+            color: #0f172a !important;
             margin: 0;
-            color: var(--ink);
+            line-height: 1.1;
         }
 
         .hero-desc {
-            margin-top: 0.65rem;
-            color: var(--muted);
+            margin-top: 0.6rem;
+            color: #475569 !important;
             font-size: 1rem;
-            max-width: 860px;
         }
 
         .hero-meta {
             display: flex;
-            gap: 0.65rem;
+            gap: 0.5rem;
             flex-wrap: wrap;
-            margin-top: 1rem;
+            margin-top: 0.9rem;
         }
 
         .hero-pill {
-            padding: 0.45rem 0.8rem;
+            padding: 0.3rem 0.75rem;
             border-radius: 999px;
-            background: rgba(255,255,255,0.8);
-            border: 1px solid rgba(30,40,60,0.08);
-            font-size: 0.88rem;
-            color: var(--ink);
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            font-size: 0.8rem;
+            color: #334155 !important;
+            font-weight: 500;
         }
 
+        /* ─── MAIN AREA BUTTONS ────────────────────────────── */
         div[data-testid="stButton"] > button,
         div[data-testid="stDownloadButton"] > button {
-            border-radius: 16px;
-            border: 1px solid rgba(255,255,255,0.10);
-            background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
-            color: inherit;
+            border-radius: 10px;
+            border: 1.5px solid #e2e8f0;
+            background: #ffffff;
+            color: #0f172a !important;
             font-weight: 600;
-            padding-top: 0.65rem;
-            padding-bottom: 0.65rem;
-            transition: all 0.18s ease;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-        }
-
-        [data-testid="stSidebar"] div[data-testid="stButton"] > button {
-            text-align: left;
-            background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+            font-size: 0.88rem;
+            padding: 0.5rem 1.1rem;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
         }
 
         div[data-testid="stButton"] > button:hover,
         div[data-testid="stDownloadButton"] > button:hover {
+            border-color: #b91c1c;
+            color: #b91c1c !important;
+            box-shadow: 0 4px 14px rgba(185, 28, 28, 0.14);
             transform: translateY(-1px);
-            border-color: rgba(177,68,47,0.55);
-            box-shadow: 0 14px 30px rgba(127, 45, 28, 0.14);
         }
 
-        div[data-testid="stMetric"] {
-            background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,250,243,0.86));
-            border: 1px solid rgba(30,40,60,0.08);
-            border-radius: 22px;
-            padding: 0.9rem 1rem;
-            box-shadow: var(--card-shadow);
-        }
-
-        div[data-testid="stMetric"] label,
-        div[data-testid="stMetricValue"] {
-            color: var(--ink);
-        }
-
-        div[data-testid="stDataFrame"],
-        div[data-testid="stExpander"] {
-            background: rgba(255,255,255,0.72);
-            border-radius: 20px;
-            border: 1px solid rgba(30,40,60,0.08);
-            box-shadow: var(--card-shadow);
-            overflow: hidden;
-        }
-
+        /* ─── INPUTS ───────────────────────────────────────── */
         [data-baseweb="select"] > div,
         div[data-testid="stTextInputRootElement"] > div,
         div[data-testid="stNumberInputContainer"] {
-            border-radius: 16px !important;
-            background: rgba(255,255,255,0.88) !important;
+            border-radius: 10px !important;
+            border: 1.5px solid #e2e8f0 !important;
+            background: #ffffff !important;
         }
 
-        h1, h2, h3 {
-            font-family: 'Space Grotesk', sans-serif;
-            color: var(--ink);
-            letter-spacing: -0.02em;
+        input, textarea, select {
+            color: #0f172a !important;
+        }
+
+        /* ─── METRIC CARDS ─────────────────────────────────── */
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 1rem 1.1rem;
+            box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+        }
+
+        div[data-testid="stMetric"] label {
+            color: #64748b !important;
+            font-size: 0.78rem !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        div[data-testid="stMetricValue"] > div {
+            color: #0f172a !important;
+            font-family: 'Space Grotesk', sans-serif !important;
+            font-weight: 700 !important;
+            font-size: 1.7rem !important;
+        }
+
+        /* ─── DATAFRAMES & EXPANDERS ───────────────────────── */
+        div[data-testid="stDataFrame"],
+        div[data-testid="stExpander"] {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+            overflow: hidden;
+        }
+
+        div[data-testid="stExpander"] summary {
+            color: #0f172a !important;
+            font-weight: 600;
+        }
+
+        /* ─── FILE UPLOADER ────────────────────────────────── */
+        div[data-testid="stFileUploader"] {
+            border-radius: 14px;
+            border: 2px dashed #cbd5e1 !important;
+            background: #ffffff !important;
+        }
+
+        div[data-testid="stFileUploader"] label,
+        div[data-testid="stFileUploader"] span,
+        div[data-testid="stFileUploader"] p {
+            color: #334155 !important;
+        }
+
+        /* ─── ALERTS ───────────────────────────────────────── */
+        div[data-testid="stAlert"] {
+            border-radius: 12px;
+        }
+
+        /* ─── DIVIDER ──────────────────────────────────────── */
+        hr {
+            border-color: #e2e8f0;
+            margin: 1rem 0;
+        }
+
+        /* ─── SECTION HEADERS (st.header / st.subheader) ───── */
+        .stMarkdown h2, .stMarkdown h3 {
+            color: #0f172a !important;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.35rem;
+            margin-top: 1.2rem;
         }
 
         @media (max-width: 900px) {
-            .hero-title {
-                font-size: 1.7rem;
-            }
-
-            .block-container {
-                padding-top: 1rem;
-            }
+            .hero-title { font-size: 1.5rem; }
+            .block-container { padding-top: 1rem; }
         }
         </style>
         """,
@@ -515,57 +591,195 @@ def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against bcrypt hash"""
     return bcrypt.checkpw(password.encode(), password_hash.encode())
 
+def inject_login_theme():
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+        html, body, [class*="css"] {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Full-screen dark gradient background */
+        .stApp {
+            background: linear-gradient(135deg, #0c1220 0%, #111827 55%, #0f1f38 100%);
+        }
+
+        [data-testid="stAppViewContainer"] > .main {
+            background: transparent;
+        }
+
+        .block-container {
+            padding-top: 2.5rem;
+            padding-bottom: 2rem;
+            max-width: 1200px;
+        }
+
+        /* Hide default header bar & footer */
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        header { visibility: hidden; }
+
+        /* All text light on dark background */
+        p, span, div, label, small {
+            color: #cbd5e1;
+        }
+
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif !important;
+            color: #f1f5f9 !important;
+        }
+
+        /* Login card (the form container) */
+        div[data-testid="stForm"] {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 22px;
+            padding: 0.5rem 0.5rem 0.5rem 0.5rem;
+        }
+
+        /* Input fields */
+        div[data-testid="stTextInputRootElement"] > div {
+            background: rgba(255, 255, 255, 0.07) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            border-radius: 10px !important;
+        }
+
+        div[data-testid="stTextInputRootElement"] input {
+            color: #f1f5f9 !important;
+        }
+
+        div[data-testid="stTextInputRootElement"] input::placeholder {
+            color: rgba(255, 255, 255, 0.30) !important;
+        }
+
+        /* Input labels */
+        div[data-testid="stTextInputRootElement"] label,
+        .stTextInput label {
+            color: #94a3b8 !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        /* Submit button */
+        div[data-testid="stFormSubmitButton"] > button {
+            background: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%) !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 12px !important;
+            font-family: 'Space Grotesk', sans-serif !important;
+            font-weight: 700 !important;
+            font-size: 1rem !important;
+            letter-spacing: 0.02em;
+            padding: 0.75rem 0 !important;
+            box-shadow: 0 6px 28px rgba(185, 28, 28, 0.45) !important;
+            transition: all 0.2s ease !important;
+        }
+
+        div[data-testid="stFormSubmitButton"] > button:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 10px 36px rgba(185, 28, 28, 0.55) !important;
+        }
+
+        /* Credentials expander */
+        div[data-testid="stExpander"] {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+        }
+
+        div[data-testid="stExpander"] summary {
+            color: #94a3b8 !important;
+            font-size: 0.85rem;
+        }
+
+        div[data-testid="stDataFrame"] {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+        }
+
+        /* Alerts */
+        div[data-testid="stAlert"] {
+            border-radius: 12px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def login():
-    """Login form"""
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        try:
-                st.image("assets/logo_grupo_cenoa.png", width=100)
-        except:
-            st.write("🏢 **GRUPO CENOA**")
-    
-    with col2:
-        st.write("")
-    
-    st.title("🔐 Inventarios Rotativos - Grupo Cenoa")
-    
-    with st.form("login_form"):
-        usuario = st.text_input("Usuario (ID):", placeholder="Ej: diego_guantay")
-        contrasena = st.text_input("Contraseña:", type="password")
-        submit = st.form_submit_button("Ingresar", use_container_width=True)
-        
-        if submit:
-            if usuario in USUARIOS_CREDENCIALES:
-                creds = USUARIOS_CREDENCIALES[usuario]
-                if verify_password(contrasena, creds["password_hash"]):
-                    st.session_state["logged_in"] = True
-                    st.session_state["usuario"] = usuario
-                    st.session_state["nombre_usuario"] = creds["nombre"]
-                    st.session_state["rol"] = creds["rol"]
-                    st.success(f"✅ Bienvenido {creds['nombre']}!")
-                    st.rerun()
+    inject_login_theme()
+
+    _, col_center, _ = st.columns([1, 2, 1])
+
+    with col_center:
+        # Brand header
+        st.markdown(
+            """
+            <div style="text-align:center; margin-bottom: 2rem; padding-top: 0.5rem;">
+                <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">📦</div>
+                <div style="
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.18em;
+                    color: #64748b;
+                    margin-bottom: 0.5rem;
+                ">AUDITORÍA INTERNA · GRUPO CENOA</div>
+                <div style="
+                    font-family: 'Space Grotesk', sans-serif;
+                    font-size: 1.75rem;
+                    font-weight: 700;
+                    color: #f1f5f9;
+                    line-height: 1.2;
+                ">Inventarios Rotativos</div>
+                <div style="
+                    font-size: 0.9rem;
+                    color: #475569;
+                    margin-top: 0.4rem;
+                ">Acceso restringido al personal autorizado</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.form("login_form"):
+            usuario = st.text_input("Usuario (ID)", placeholder="Ej: diego_guantay")
+            contrasena = st.text_input("Contraseña", type="password", placeholder="••••••••")
+            st.write("")
+            submit = st.form_submit_button("Ingresar →", use_container_width=True)
+
+            if submit:
+                if usuario in USUARIOS_CREDENCIALES:
+                    creds = USUARIOS_CREDENCIALES[usuario]
+                    if verify_password(contrasena, creds["password_hash"]):
+                        st.session_state["logged_in"] = True
+                        st.session_state["usuario"] = usuario
+                        st.session_state["nombre_usuario"] = creds["nombre"]
+                        st.session_state["rol"] = creds["rol"]
+                        st.success(f"✅ Bienvenido, {creds['nombre']}!")
+                        st.rerun()
+                    else:
+                        st.error("Contraseña incorrecta")
                 else:
-                    st.error("❌ Contraseña incorrecta")
-            else:
-                st.error("❌ Usuario no encontrado")
-    
-    st.divider()
-    st.write("**📋 CREDENCIALES DE PRUEBA** (Eliminar después)")
-    
-    creds_data = []
-    for user_id, password in CREDENCIALES_INICIALES.items():
-        rol = USUARIOS_CREDENCIALES[user_id]["rol"]
-        nombre = USUARIOS_CREDENCIALES[user_id]["nombre"]
-        creds_data.append({
-            "Usuario (ID)": user_id,
-            "Contraseña": password,
-            "Rol": rol,
-            "Nombre": nombre
-        })
-    
-    df_creds = pd.DataFrame(creds_data)
-    st.dataframe(df_creds, use_container_width=True, hide_index=True)
-    st.info("⚠️ Test credentials only.")
+                    st.error("Usuario no encontrado")
+
+        st.write("")
+        with st.expander("📋 Credenciales de prueba (eliminar en producción)"):
+            creds_data = []
+            for user_id, password in CREDENCIALES_INICIALES.items():
+                creds_data.append({
+                    "Usuario (ID)": user_id,
+                    "Contraseña": password,
+                    "Rol": USUARIOS_CREDENCIALES[user_id]["rol"],
+                    "Nombre": USUARIOS_CREDENCIALES[user_id]["nombre"],
+                })
+            st.dataframe(pd.DataFrame(creds_data), use_container_width=True, hide_index=True)
+            st.caption("⚠️ Eliminar antes de pasar a producción.")
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
