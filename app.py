@@ -44,6 +44,8 @@ CONCESIONARIAS = {
 def init_sqlite():
     try:
         with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS worksheet_store (
                     name TEXT PRIMARY KEY,
