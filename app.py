@@ -966,17 +966,21 @@ def inject_login_theme():
 
         /* Input fields */
         div[data-testid="stTextInputRootElement"] > div {
-            background: rgba(255, 255, 255, 0.07) !important;
-            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            background: #ffffff !important;
+            border: 1px solid rgba(148, 163, 184, 0.45) !important;
             border-radius: 10px !important;
         }
 
         div[data-testid="stTextInputRootElement"] input {
-            color: #f1f5f9 !important;
+            color: #0f172a !important;
+            -webkit-text-fill-color: #0f172a !important;
+            caret-color: #b91c1c !important;
+            background: #ffffff !important;
         }
 
         div[data-testid="stTextInputRootElement"] input::placeholder {
-            color: rgba(255, 255, 255, 0.30) !important;
+            color: #64748b !important;
+            -webkit-text-fill-color: #64748b !important;
         }
 
         /* Input labels */
