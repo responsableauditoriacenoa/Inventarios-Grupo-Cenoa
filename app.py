@@ -1210,7 +1210,8 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
             "canjes": []
         }
     
-    df_r["_ajuste"] = pd.to_numeric(df_r.get("Ajuste_Cantidad", 0), errors="coerce").fillna(0)
+    ajuste_source = df_r["Ajuste_Cantidad"] if "Ajuste_Cantidad" in df_r.columns else pd.Series(0, index=df_r.index)
+    df_r["_ajuste"] = pd.to_numeric(ajuste_source, errors="coerce").fillna(0)
     
     # Faltantes (negative adjustments)
     mask_falt = df_r["_ajuste"] < 0
