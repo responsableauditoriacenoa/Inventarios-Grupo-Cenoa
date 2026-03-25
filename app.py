@@ -911,6 +911,48 @@ def parse_ar_number(series: pd.Series) -> pd.Series:
     s = s.where(~has_comma, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
     return pd.to_numeric(s, errors="coerce")
 
+def is_currency_column(col_name: str) -> bool:
+    name = str(col_name).strip().lower()
+    currency_hints = (
+        "costo",
+        "precio",
+        "cto.rep",
+        "cto rep",
+        "valor",
+        "valuación",
+        "valuacion",
+        "$",
+    )
+    return any(hint in name for hint in currency_hints)
+
+def prepare_currency_display(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    if df is None or df.empty:
+        return df, {}
+
+    df_view = df.copy()
+    currency_config = {}
+
+    for col in df_view.columns:
+        if is_currency_column(col):
+            df_view[col] = parse_ar_number(df_view[col])
+            currency_config[col] = st.column_config.NumberColumn(str(col), format="$ %.2f")
+
+    return df_view, currency_config
+
+def render_dataframe(df: pd.DataFrame, column_config: dict | None = None, **kwargs):
+    df_view, auto_currency_config = prepare_currency_display(df)
+    merged_config = {**auto_currency_config, **(column_config or {})}
+    if merged_config:
+        return st.dataframe(df_view, column_config=merged_config, **kwargs)
+    return st.dataframe(df_view, **kwargs)
+
+def render_data_editor(df: pd.DataFrame, column_config: dict | None = None, **kwargs):
+    df_view, auto_currency_config = prepare_currency_display(df)
+    merged_config = {**auto_currency_config, **(column_config or {})}
+    if merged_config:
+        return st.data_editor(df_view, column_config=merged_config, **kwargs)
+    return st.data_editor(df_view, **kwargs)
+
 # ----------------------------
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against bcrypt hash"""
@@ -1107,7 +1149,7 @@ def login():
                     "Rol": USUARIOS_CREDENCIALES[user_id]["rol"],
                     "Nombre": USUARIOS_CREDENCIALES[user_id]["nombre"],
                 })
-            st.dataframe(pd.DataFrame(creds_data), use_container_width=True, hide_index=True)
+            render_dataframe(pd.DataFrame(creds_data), use_container_width=True, hide_index=True)
             st.caption("⚠️ Eliminar antes de pasar a producción.")
 
 if "logged_in" not in st.session_state:
@@ -1148,7 +1190,7 @@ def _admin_debug_show():
             dfa = read_gspread_worksheet(SHEET_AUDIT)
             if not dfa.empty:
                 st.write("**Audit_Log (últimas 10 filas)**")
-                st.dataframe(dfa.tail(10).sort_values("Timestamp", ascending=False), use_container_width=True)
+                render_dataframe(dfa.tail(10).sort_values("Timestamp", ascending=False), use_container_width=True)
             else:
                 st.write("**Audit_Log**: (vacío)")
         except Exception as e:
@@ -1484,7 +1526,7 @@ if modulo_activo == "nuevo":
         if archivo:
             df_base = pd.read_excel(archivo)
             st.write("Vista previa:")
-            st.dataframe(df_base.head(15), use_container_width=True)
+            render_dataframe(df_base.head(15), use_container_width=True)
 
             if st.button("✅ Generar y guardar inventario"):
                 falt = [c for c in [C_ART, C_LOC, C_DESC, C_STOCK, C_COSTO] if c not in df_base.columns]
@@ -1608,7 +1650,7 @@ elif modulo_activo == "conteo":
                 cols_show = [c for c in cols_show if c in df_det.columns]
                 df_edit = df_det[cols_show].copy()
 
-                edited = st.data_editor(
+                edited = render_data_editor(
                     df_edit,
                     use_container_width=True,
                     num_rows="fixed",
@@ -1694,7 +1736,7 @@ elif modulo_activo == "justificaciones":
                 cols_resumen = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", C_COSTO]
                 cols_resumen = [c for c in cols_resumen if c in df_dif.columns]
                 df_resumen = df_dif[cols_resumen].copy()
-                st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+                render_dataframe(df_resumen, use_container_width=True, hide_index=True)
                 st.divider()
                 
                 if rol_actual in ("Deposito", "admin"):
@@ -1896,14 +1938,14 @@ elif modulo_activo == "cierre":
                     },
                 ])
                 
-                st.dataframe(tabla_resultados, use_container_width=True, hide_index=True)
+                render_dataframe(tabla_resultados, use_container_width=True, hide_index=True)
                 
                 # Mostrar resumen de canjes si existen
                 if resultados.get("canjes"):
                     st.divider()
                     st.write("### 🔄 Resumen de Canjes")
                     df_canjes = pd.DataFrame(resultados["canjes"])
-                    st.dataframe(df_canjes, use_container_width=True, hide_index=True)
+                    render_dataframe(df_canjes, use_container_width=True, hide_index=True)
                 
                 st.divider()
                 st.write("### 📥 Descargar reporte:")
@@ -2018,7 +2060,7 @@ elif modulo_activo == "dashboards":
 
     st.divider()
     st.write("### 📋 KPIs incluidos")
-    st.dataframe(
+    render_dataframe(
         pd.DataFrame([
             {"KPI": "Inventarios Totales", "Descripción": "Cantidad total de inventarios generados en el sistema"},
             {"KPI": "Inventarios Abiertos", "Descripción": "Inventarios aún pendientes de cierre"},
@@ -2035,13 +2077,13 @@ elif modulo_activo == "dashboards":
     st.divider()
     st.write("### 🏢 Ranking de Sucursales")
     if not kpis["ranking_sucursales"].empty:
-        st.dataframe(kpis["ranking_sucursales"], use_container_width=True, hide_index=True)
+        render_dataframe(kpis["ranking_sucursales"], use_container_width=True, hide_index=True)
     else:
         st.info("Todavía no hay datos suficientes para mostrar ranking de sucursales.")
 
     st.divider()
     st.write("### 📦 Resumen por Inventario")
     if not kpis["detalle_resumen"].empty:
-        st.dataframe(kpis["detalle_resumen"], use_container_width=True, hide_index=True)
+        render_dataframe(kpis["detalle_resumen"], use_container_width=True, hide_index=True)
     else:
         st.info("Todavía no hay inventarios con detalle para analizar.")
