@@ -924,6 +924,17 @@ def normalize_article_code(value) -> str:
             return base
     return code
 
+def format_number_ar(value, decimals: int = 2) -> str:
+    number = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(number):
+        return ""
+    formatted = f"{float(number):,.{decimals}f}"
+    return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
+
+def format_currency_ar(value) -> str:
+    formatted = format_number_ar(value, decimals=2)
+    return f"$ {formatted}" if formatted else ""
+
 def buscar_articulo_en_base(id_inv: str, codigo_articulo: str) -> dict | None:
     codigo = normalize_article_code(codigo_articulo)
     if not codigo:
@@ -972,14 +983,12 @@ def prepare_currency_display(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
         return df, {}
 
     df_view = df.copy()
-    currency_config = {}
 
     for col in df_view.columns:
         if is_currency_column(col):
-            df_view[col] = parse_ar_number(df_view[col])
-            currency_config[col] = st.column_config.NumberColumn(str(col), format="$ %.2f")
+            df_view[col] = parse_ar_number(df_view[col]).apply(format_currency_ar)
 
-    return df_view, currency_config
+    return df_view, {}
 
 def render_dataframe(df: pd.DataFrame, column_config: dict | None = None, **kwargs):
     df_view, auto_currency_config = prepare_currency_display(df)
@@ -1856,7 +1865,7 @@ elif modulo_activo == "justificaciones":
                         ajuste_cant_actual = row.get("Ajuste_Cantidad", "")
                         canje_codigo_actual = row.get("Canje_Articulo", "")
                         
-                        st.write(f"**{art} ({loc}) - Diferencia: {dif} - Costo: ${costo:.2f}**")
+                        st.write(f"**{art} ({loc}) - Diferencia: {dif} - Costo: {format_currency_ar(costo)}**")
                         st.write(f"*{just if just else '(sin justificación)'}*")
                         
                         col1, col2 = st.columns(2)
@@ -1906,7 +1915,7 @@ elif modulo_activo == "justificaciones":
                                     colc1, colc2, colc3, colc4 = st.columns(4)
                                     colc1.write(f"**Artículo:** {canje_info['codigo']}")
                                     colc2.write(f"**Descripción:** {canje_info['descripcion']}")
-                                    colc3.write(f"**Costo Rep.:** ${canje_info['costo']:.2f}")
+                                    colc3.write(f"**Costo Rep.:** {format_currency_ar(canje_info['costo'])}")
                                     colc4.write(f"**Stock base:** {canje_info['stock']:.2f}")
                                     st.write(f"**Cantidad a ajustar:** {ajuste_cant:.2f}")
                                 elif canje_codigo.strip():
@@ -2006,31 +2015,31 @@ elif modulo_activo == "cierre":
                     {
                         "Detalle": "Muestra", 
                         "Q": resultados["cant_muestra"], 
-                        "$ Ajuste": f"{resultados['valor_muestra']:.2f}",
+                        "$ Ajuste": format_currency_ar(resultados['valor_muestra']),
                         "%": f"{resultados['pct_muestra']:.2f}%"
                     },
                     {
                         "Detalle": "Faltantes", 
                         "Q": resultados["cant_faltantes"], 
-                        "$ Ajuste": f"{resultados['valor_faltantes']:.2f}",
+                        "$ Ajuste": format_currency_ar(resultados['valor_faltantes']),
                         "%": f"{resultados['pct_faltantes']:.2f}%"
                     },
                     {
                         "Detalle": "Sobrantes", 
                         "Q": resultados["cant_sobrantes"], 
-                        "$ Ajuste": f"{resultados['valor_sobrantes']:.2f}",
+                        "$ Ajuste": format_currency_ar(resultados['valor_sobrantes']),
                         "%": f"{resultados['pct_sobrantes']:.2f}%"
                     },
                     {
                         "Detalle": "Dif Neta", 
                         "Q": resultados["cant_dif_neta"], 
-                        "$ Ajuste": f"{resultados['valor_dif_neta']:.2f}",
+                        "$ Ajuste": format_currency_ar(resultados['valor_dif_neta']),
                         "%": f"{resultados['pct_dif_neta']:.2f}%"
                     },
                     {
                         "Detalle": "Dif Absoluta", 
                         "Q": resultados["cant_dif_absoluta"], 
-                        "$ Ajuste": f"{resultados['valor_dif_absoluta']:.2f}",
+                        "$ Ajuste": format_currency_ar(resultados['valor_dif_absoluta']),
                         "%": f"{resultados['pct_dif_absoluta']:.2f}%"
                     },
                 ])
@@ -2152,7 +2161,7 @@ elif modulo_activo == "dashboards":
 
     fila2 = st.columns(3)
     fila2[0].metric("Líneas Muestreadas", kpis["lineas_muestreadas"])
-    fila2[1].metric("Valuación Auditada", f"$ {kpis['valuacion_muestra']:,.2f}")
+    fila2[1].metric("Valuación Auditada", format_currency_ar(kpis['valuacion_muestra']))
     fila2[2].metric("Exactitud Promedio", f"{kpis['exactitud_promedio']:.1f}%")
 
     st.divider()
