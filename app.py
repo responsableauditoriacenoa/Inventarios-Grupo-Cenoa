@@ -1368,7 +1368,7 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
                 loc = row.get(C_LOC, "")
                 costo = pd.to_numeric(row.get("Canje_Costo_Rep", row.get(C_COSTO, 0)), errors="coerce")
                 stock_base = pd.to_numeric(row.get("Canje_Stock_Base", 0), errors="coerce")
-                ajuste_cant = pd.to_numeric(row.get("Ajuste_Cantidad", 0), errors="coerce")
+                ajuste_cant = pd.to_numeric(row.get("Canje_Ajuste_Cantidad", row.get("Ajuste_Cantidad", 0)), errors="coerce")
                 canjes_list.append({
                     "Artículo": art,
                     "Descripción": descripcion,
@@ -1917,7 +1917,8 @@ elif modulo_activo == "justificaciones":
                                     colc2.write(f"**Descripción:** {canje_info['descripcion']}")
                                     colc3.write(f"**Costo Rep.:** {format_currency_ar(canje_info['costo'])}")
                                     colc4.write(f"**Stock base:** {canje_info['stock']:.2f}")
-                                    st.write(f"**Cantidad a ajustar:** {ajuste_cant:.2f}")
+                                    st.write(f"**Cantidad a ajustar artículo original:** {format_number_ar(ajuste_cant)}")
+                                    st.write(f"**Cantidad a ajustar artículo de canje:** {format_number_ar(-ajuste_cant)}")
                                 elif canje_codigo.strip():
                                     st.error("Código no encontrado en la base completa del Excel importado.")
                                     canjes_invalidos.append(idx)
@@ -1950,11 +1951,13 @@ elif modulo_activo == "justificaciones":
                                     df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = canje_info["descripcion"]
                                     df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = canje_info["costo"]
                                     df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = canje_info["stock"]
+                                    df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad"] = -float(cantidad)
                                 else:
                                     df_det2.loc[df_det2.index == idx, "Canje_Articulo"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = ""
                                     df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = ""
+                                    df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad"] = ""
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
@@ -1962,7 +1965,7 @@ elif modulo_activo == "justificaciones":
                             # Opción de descargar
                             st.divider()
                             st.write("### 📥 Descargar validaciones y ajustes:")
-                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", "Canje_Articulo", "Canje_Descripcion", "Canje_Costo_Rep", "Canje_Stock_Base", C_COSTO]
+                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", "Canje_Articulo", "Canje_Descripcion", "Canje_Costo_Rep", "Canje_Stock_Base", "Canje_Ajuste_Cantidad", C_COSTO]
                             cols_export = [c for c in cols_export if c in df_det2.columns]
                             df_export = df_det2[cols_export].copy()
                             xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Validaciones", title=f"Validaciones y Ajustes - {id_sel}")
