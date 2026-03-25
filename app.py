@@ -29,6 +29,7 @@ DB_BACKEND = "SQLite" if DATABASE_URL.startswith("sqlite") else "Externa"
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
 SHEET_AUDIT = "Audit_Log"
+SHEET_BASE = "Base_Excel_Articulos"
 
 # Columnas esperadas del Excel
 C_ART = "Artículo"
@@ -911,6 +912,47 @@ def parse_ar_number(series: pd.Series) -> pd.Series:
     s = s.where(~has_comma, s.str.replace(".", "", regex=False).str.replace(",", ".", regex=False))
     return pd.to_numeric(s, errors="coerce")
 
+def normalize_article_code(value) -> str:
+    if pd.isna(value):
+        return ""
+    code = str(value).strip()
+    if not code:
+        return ""
+    if code.endswith(".0"):
+        base = code[:-2]
+        if base.isdigit():
+            return base
+    return code
+
+def buscar_articulo_en_base(id_inv: str, codigo_articulo: str) -> dict | None:
+    codigo = normalize_article_code(codigo_articulo)
+    if not codigo:
+        return None
+
+    df_base = read_gspread_worksheet(SHEET_BASE)
+    if df_base.empty or "ID_Inventario" not in df_base.columns or C_ART not in df_base.columns:
+        return None
+
+    df_inv = df_base[df_base["ID_Inventario"].astype(str) == str(id_inv)].copy()
+    if df_inv.empty:
+        return None
+
+    codigos = df_inv[C_ART].apply(normalize_article_code)
+    matches = df_inv[codigos == codigo].copy()
+    if matches.empty:
+        return None
+
+    descripcion = matches[C_DESC].dropna().astype(str).iloc[0] if C_DESC in matches.columns and matches[C_DESC].notna().any() else ""
+    costo = parse_ar_number(matches[C_COSTO]).dropna().iloc[0] if C_COSTO in matches.columns and parse_ar_number(matches[C_COSTO]).notna().any() else 0.0
+    stock_total = parse_ar_number(matches[C_STOCK]).fillna(0).sum() if C_STOCK in matches.columns else 0.0
+
+    return {
+        "codigo": codigo,
+        "descripcion": descripcion,
+        "costo": float(costo) if pd.notna(costo) else 0.0,
+        "stock": float(stock_total),
+    }
+
 def is_currency_column(col_name: str) -> bool:
     name = str(col_name).strip().lower()
     currency_hints = (
@@ -1312,13 +1354,17 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
         df_canjes = df_det[df_det["Tipo_Ajuste"].astype(str) == "Canje"].copy()
         if not df_canjes.empty:
             for idx, row in df_canjes.iterrows():
-                art = row.get(C_ART, "")
+                art = row.get("Canje_Articulo", "") or row.get(C_ART, "")
+                descripcion = row.get("Canje_Descripcion", "")
                 loc = row.get(C_LOC, "")
-                costo = pd.to_numeric(row.get(C_COSTO, 0), errors="coerce")
+                costo = pd.to_numeric(row.get("Canje_Costo_Rep", row.get(C_COSTO, 0)), errors="coerce")
+                stock_base = pd.to_numeric(row.get("Canje_Stock_Base", 0), errors="coerce")
                 ajuste_cant = pd.to_numeric(row.get("Ajuste_Cantidad", 0), errors="coerce")
                 canjes_list.append({
                     "Artículo": art,
+                    "Descripción": descripcion,
                     "Locación": loc,
+                    "Stock Base": stock_base,
                     "Cantidad": ajuste_cant,
                     "Costo Unitario": costo,
                     "Valor Total": ajuste_cant * costo
@@ -1587,14 +1633,24 @@ if modulo_activo == "nuevo":
                 }])
                 ok_hist = append_gspread_worksheet(SHEET_HIST, nueva_fila)
 
+                df_base_store = df_base.copy()
+                if C_ART in df_base_store.columns:
+                    df_base_store[C_ART] = df_base_store[C_ART].apply(normalize_article_code)
+                df_base_store["ID_Inventario"] = id_inv
+                df_base_store["Concesionaria"] = concesionaria
+                df_base_store["Sucursal"] = sucursal
+                ok_base = append_gspread_worksheet(SHEET_BASE, df_base_store)
+
                 muestra["ID_Inventario"] = id_inv
                 ok_det = append_gspread_worksheet(SHEET_DET, muestra)
 
                 # Log actions
-                log_audit("generar_inventario", id_inv, len(muestra), "OK" if (ok_hist and ok_det) else "ERROR", f"hist_ok={ok_hist}, det_ok={ok_det}")
+                log_audit("generar_inventario", id_inv, len(muestra), "OK" if (ok_hist and ok_det and ok_base) else "ERROR", f"hist_ok={ok_hist}, det_ok={ok_det}, base_ok={ok_base}")
 
-                if ok_hist and ok_det:
+                if ok_hist and ok_det and ok_base:
                     st.success(f"✅ Inventario {id_inv} creado y detalle guardado ({len(muestra)} filas).")
+                elif ok_hist and ok_det and not ok_base:
+                    st.warning(f"Inventario {id_inv} creado, pero no se pudo guardar la base completa del Excel. La búsqueda para canjes puede fallar.")
                 elif ok_hist and not ok_det:
                     st.warning(f"Inventario {id_inv} creado en historial, pero no se pudo guardar el detalle.")
                 else:
@@ -1787,6 +1843,7 @@ elif modulo_activo == "justificaciones":
                     st.write("**Validá justificaciones y asignà ajustes:**")
                     validaciones_dict = {}
                     ajustes_dict = {}
+                    canjes_invalidos = []
                     
                     for idx, row in df_dif.iterrows():
                         art = row[C_ART]
@@ -1797,6 +1854,7 @@ elif modulo_activo == "justificaciones":
                         val_actual = row.get("Justif_Validada", "")
                         tipo_ajuste_actual = row.get("Tipo_Ajuste", "")
                         ajuste_cant_actual = row.get("Ajuste_Cantidad", "")
+                        canje_codigo_actual = row.get("Canje_Articulo", "")
                         
                         st.write(f"**{art} ({loc}) - Diferencia: {dif} - Costo: ${costo:.2f}**")
                         st.write(f"*{just if just else '(sin justificación)'}*")
@@ -1831,24 +1889,63 @@ elif modulo_activo == "justificaciones":
                             else:
                                 ajuste_cant = 0.0
                                 tipo_ajuste = "Sin Ajuste" if tipo_ajuste == "" else tipo_ajuste
+
+                            canje_info = None
+                            canje_codigo = ""
+                            if tipo_ajuste == "Canje":
+                                canje_codigo = st.text_input(
+                                    "Código de artículo para canje",
+                                    value=str(canje_codigo_actual) if canje_codigo_actual is not None else "",
+                                    key=f"canje_codigo_{idx}",
+                                    placeholder="Ingresá código de artículo",
+                                )
+
+                                canje_info = buscar_articulo_en_base(id_sel, canje_codigo)
+                                if canje_codigo.strip() and canje_info:
+                                    st.success("Artículo encontrado en la base del Excel importado")
+                                    colc1, colc2, colc3, colc4 = st.columns(4)
+                                    colc1.write(f"**Artículo:** {canje_info['codigo']}")
+                                    colc2.write(f"**Descripción:** {canje_info['descripcion']}")
+                                    colc3.write(f"**Costo Rep.:** ${canje_info['costo']:.2f}")
+                                    colc4.write(f"**Stock base:** {canje_info['stock']:.2f}")
+                                    st.write(f"**Cantidad a ajustar:** {ajuste_cant:.2f}")
+                                elif canje_codigo.strip():
+                                    st.error("Código no encontrado en la base completa del Excel importado.")
+                                    canjes_invalidos.append(idx)
                         else:
                             tipo_ajuste = ""
                             ajuste_cant = 0.0
+                            canje_codigo = ""
+                            canje_info = None
                         
                         validaciones_dict[idx] = val
-                        ajustes_dict[idx] = (tipo_ajuste, ajuste_cant)
+                        ajustes_dict[idx] = (tipo_ajuste, ajuste_cant, canje_codigo, canje_info)
                         st.divider()
                     
                     if st.button("💾 Guardar validación y ajustes"):
+                        if canjes_invalidos:
+                            st.error("Hay canjes con código inválido. Corregí los códigos antes de guardar.")
+                            st.stop()
+
                         df_det2 = df_det.copy()
                         for idx, val in validaciones_dict.items():
                             df_det2.loc[df_det2.index == idx, "Justif_Validada"] = val
                             df_det2.loc[df_det2.index == idx, "Validador"] = usuario_actual
                             df_det2.loc[df_det2.index == idx, "Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                             if idx in ajustes_dict:
-                                tipo, cantidad = ajustes_dict[idx]
+                                tipo, cantidad, canje_codigo, canje_info = ajustes_dict[idx]
                                 df_det2.loc[df_det2.index == idx, "Tipo_Ajuste"] = tipo
                                 df_det2.loc[df_det2.index == idx, "Ajuste_Cantidad"] = cantidad
+                                if tipo == "Canje" and canje_info:
+                                    df_det2.loc[df_det2.index == idx, "Canje_Articulo"] = canje_info["codigo"]
+                                    df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = canje_info["descripcion"]
+                                    df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = canje_info["costo"]
+                                    df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = canje_info["stock"]
+                                else:
+                                    df_det2.loc[df_det2.index == idx, "Canje_Articulo"] = ""
+                                    df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = ""
+                                    df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = ""
+                                    df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = ""
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
@@ -1856,7 +1953,7 @@ elif modulo_activo == "justificaciones":
                             # Opción de descargar
                             st.divider()
                             st.write("### 📥 Descargar validaciones y ajustes:")
-                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", C_COSTO]
+                            cols_export = [C_ART, C_LOC, C_STOCK, "Conteo_Fisico", "Diferencia", "Justificacion", "Justif_Validada", "Tipo_Ajuste", "Ajuste_Cantidad", "Canje_Articulo", "Canje_Descripcion", "Canje_Costo_Rep", "Canje_Stock_Base", C_COSTO]
                             cols_export = [c for c in cols_export if c in df_det2.columns]
                             df_export = df_det2[cols_export].copy()
                             xlsx_data = export_dataframe_to_excel(df_export, sheet_name="Validaciones", title=f"Validaciones y Ajustes - {id_sel}")
