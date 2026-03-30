@@ -1251,7 +1251,7 @@ def _admin_debug_show():
         except Exception as e:
             st.write(f"Audit_Log: error al leer: {e}")
 
-if usuario_actual == "admin":
+if rol_actual == "Administrador":
     _admin_debug_show()
     with st.sidebar.expander("Configuración BD", expanded=False):
         st.write("Backend activo:")
@@ -1585,7 +1585,7 @@ if modulo_activo == "nuevo":
 
     st.divider()
 
-    if rol_actual not in ("Auditor", "admin"):
+    if rol_actual not in ("Auditor", "Administrador"):
         st.info("Solo Auditores pueden generar inventarios.")
     else:
         st.subheader("Importar Excel → ABC → Muestra 80/15/5")
@@ -1713,7 +1713,7 @@ if modulo_activo == "nuevo":
 elif modulo_activo == "conteo":
     st.subheader("Carga de conteo físico")
 
-    if rol_actual not in ("Auditor", "admin"):
+    if rol_actual not in ("Auditor", "Administrador"):
         st.info("Solo Auditores")
     else:
         df_abiertos = listar_inventarios_abiertos()
@@ -1818,7 +1818,17 @@ elif modulo_activo == "justificaciones":
                 render_dataframe(df_resumen, use_container_width=True, hide_index=True)
                 st.divider()
                 
-                if rol_actual in ("Deposito", "admin"):
+                if rol_actual == "Administrador":
+                    modo_admin = st.radio(
+                        "Modo de trabajo",
+                        options=["Cargar justificaciones", "Validar y ajustar"],
+                        horizontal=True,
+                        key="modo_admin_justificaciones",
+                    )
+                else:
+                    modo_admin = None
+
+                if rol_actual == "Jefe de Repuesto" or (rol_actual == "Administrador" and modo_admin == "Cargar justificaciones"):
                     st.write("**Ingresá justificaciones:**")
                     justificaciones_dict = {}
                     
@@ -2001,7 +2011,7 @@ elif modulo_activo == "justificaciones":
 elif modulo_activo == "cierre":
     st.subheader("Cierre + Reporte")
     
-    if rol_actual not in ("Auditor", "admin"):
+    if rol_actual not in ("Auditor", "Administrador"):
         st.info("Solo Auditores")
     else:
         df_abiertos = listar_inventarios_abiertos()
