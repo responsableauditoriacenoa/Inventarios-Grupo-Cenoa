@@ -19,11 +19,16 @@ st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wid
 
 # DB configurable: PostgreSQL/Supabase por DATABASE_URL, SQLite como fallback local
 DB_PATH = Path(__file__).resolve().parent / "inventarios.db"
-DATABASE_URL = (
+RAW_DATABASE_URL = (
     os.getenv("DATABASE_URL")
     or st.secrets.get("database", {}).get("url")
     or f"sqlite:///{DB_PATH.as_posix()}"
 )
+DATABASE_URL = RAW_DATABASE_URL
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 DB_BACKEND = "SQLite" if DATABASE_URL.startswith("sqlite") else "Externa"
 
 SHEET_HIST = "Historial_Inventarios"
