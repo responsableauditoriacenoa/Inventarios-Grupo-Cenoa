@@ -1,51 +1,24 @@
-# 🔐 CREDENCIALES DE ACCESO - INVENTARIOS GRUPO CENOA
+# Credenciales de Acceso
 
-## Usuarios y Contraseñas para Pruebas
+## Perfiles y roles
 
-| Usuario (ID) | Contraseña | Rol | Nombre |
+| Usuario | Contraseña | Rol | Nombre |
 |---|---|---|---|
-| `diego_guantay` | `DieguG123!` | Auditor | Diego Guantay |
-| `nancy_fernandez` | `NancyF123!` | Auditor | Nancy Fernandez |
-| `gustavo_zambrano` | `GustavoZ123!` | Auditor | Gustavo Zambrano |
-| `admin` | `Admin123!` | Auditor | Admin |
-| `jefe_repuestos` | `JefeRep123!` | Deposito | Jefe de Repuestos |
+| Lpalacios | Lamp4201 | Administrador | Luis Palacios |
+| Nfernandez | Fernandez123 | Auditor | Nancy Fernandez |
+| Gzambrano | Zambrano123 | Auditor | Gustavo Zambrano |
+| Dguantay | Guantay123 | Auditor | Diego Guantay |
+| Jefeautosol | Autosol123 | Jefe de Repuestos | Jefe Autosol |
+| Jefeautolux | Autolux123 | Jefe de Repuestos | Jefe Autolux |
+| Jefeciel | Ciel123 | Jefe de Repuestos | Jefe Ciel |
 
----
+## Alcance por rol
 
-## 🌐 Link de Acceso
+- Administrador: acceso completo y panel administrativo.
+- Auditor: alta de inventarios, conteo físico, validación de justificaciones, ajustes, dashboards y reporte final.
+- Jefe de Repuestos: carga de justificaciones de diferencias, dashboards y reportes finales.
 
-https://[Tu-URL-Streamlit-Cloud].streamlit.app
+## Nota
 
----
-
-## 📋 Instrucciones de Uso
-
-### Para Auditores:
-1. Ingresa con tu usuario y contraseña
-2. Accede a las pestañas de "Conteo físico" y "Cierre + Reporte"
-3. Puedes validar justificaciones en la pestaña de "Justificaciones"
-
-### Para Jefe de Repuestos:
-1. Ingresa con el usuario `jefe_repuestos`
-2. Accede a la pestaña "Justificaciones"
-3. Completa los campos de justificación
-
----
-
-## ⚠️ IMPORTANTE
-
-**Estas son credenciales de PRUEBA.** Después de las pruebas iniciales:
-
-1. Cambia todas las contraseñas
-2. Elimina la tabla de credenciales del login
-3. Usa un sistema más seguro para gestionar usuarios en producción
-
----
-
-## 🏢 Logo
-
-Para mostrar el logo de Grupo Cenoa:
-1. Coloca la imagen en la carpeta `assets/logo_grupo_cenoa.png`
-2. La imagen se mostrará automáticamente en la pantalla de login
-
-Formato recomendado: PNG, 200x200px o similar
+- Mantener este archivo solo como referencia interna.
+- En producción, eliminar la visualización de contraseñas en el login.

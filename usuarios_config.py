@@ -5,38 +5,50 @@ import bcrypt
 
 # Diccionario con usuarios, contraseñas (hasheadas en bcrypt), y roles
 USUARIOS_CREDENCIALES = {
-    "diego_guantay": {
-        "password_hash": "$2b$12$AJBD2HZ7croVlJikPmhxhewMTdKAU6ZjrfBgamAHX0rbHnUcVz4Aq",
-        "rol": "Auditor",
-        "nombre": "Diego Guantay"
+    "Lpalacios": {
+        "password_hash": "$2b$12$9DhF1sYv.H3EpQ1/IuB5LePBro3e8KZtJ9KzBZyng8SxjZln1m7f.",
+        "rol": "Administrador",
+        "nombre": "Luis Palacios"
     },
-    "nancy_fernandez": {
-        "password_hash": "$2b$12$PcQDPif08S3vGh2ndyS9reCPyHVJKXldBAcbKf4YoWMCAcN4dugG2",
+    "Nfernandez": {
+        "password_hash": "$2b$12$p7znbgoP63/ffXnwoqOdzOqvIRZGn7G3E6NBjTAxfOjbQwQfrSURG",
         "rol": "Auditor",
         "nombre": "Nancy Fernandez"
     },
-    "gustavo_zambrano": {
-        "password_hash": "$2b$12$kMt84HgobeYfcU2FlENFue8BEnd5hRMX6m3sGuj.3ihiUqigfZF72",
+    "Gzambrano": {
+        "password_hash": "$2b$12$FY.q0RpJwBebyYG5kv3cIegVpr4BBAu2kI9CWIPsiV7fid9eL1xWy",
         "rol": "Auditor",
         "nombre": "Gustavo Zambrano"
     },
-    "admin": {
-        "password_hash": "$2b$12$aMJ7dG7Vqd5wq3p9oUsTCu/ahd/QVO9WcW3TZ46Z/r1i3u6k2M2AS",
+    "Dguantay": {
+        "password_hash": "$2b$12$TeCgIhdeTu0HLvZp0oemmuqU2zDQj30JbysihId4mahaOa1btJRdK",
         "rol": "Auditor",
-        "nombre": "Admin"
+        "nombre": "Diego Guantay"
     },
-    "jefe_repuestos": {
-        "password_hash": "$2b$12$sqFCkPlt6rTRLuggPQ9GA.42FJ0kgb3wniyhTCYv5kCg/TXv3Z5x2",
-        "rol": "Deposito",
-        "nombre": "Jefe de Repuestos"
+    "Jefeautosol": {
+        "password_hash": "$2b$12$M4aYpKfgbpZ/jtxEyTghIOf9pgC0wkMZzhZuXrgsdj/8NX5k5Pjdm",
+        "rol": "Jefe de Repuestos",
+        "nombre": "Jefe Autosol"
+    },
+    "Jefeautolux": {
+        "password_hash": "$2b$12$htFf8trH0PjFyu/je.wCK.0VRERZiNSS0XJDrVSOtZqxypIQ1ZWBe",
+        "rol": "Jefe de Repuestos",
+        "nombre": "Jefe Autolux"
+    },
+    "Jefeciel": {
+        "password_hash": "$2b$12$PBRfsJIW3Oj3bMKVqbUpW.44NayWXG0CK6lWhvYX85mOGhRujI4h6",
+        "rol": "Jefe de Repuestos",
+        "nombre": "Jefe Ciel"
     }
 }
 
 # Credenciales en TEXTO PLANO para mostrar al usuario (eliminar después de primera vez)
 CREDENCIALES_INICIALES = {
-    "diego_guantay": "DieguG123!",
-    "nancy_fernandez": "NancyF123!",
-    "gustavo_zambrano": "GustavoZ123!",
-    "admin": "Admin123!",
-    "jefe_repuestos": "JefeRep123!"
+    "Lpalacios": "Lamp4201",
+    "Nfernandez": "Fernandez123",
+    "Gzambrano": "Zambrano123",
+    "Dguantay": "Guantay123",
+    "Jefeautosol": "Autosol123",
+    "Jefeautolux": "Autolux123",
+    "Jefeciel": "Ciel123"
 }

@@ -79,6 +79,32 @@ MODULE_META = {
     },
 }
 
+ROLE_ADMIN = "Administrador"
+ROLE_AUDITOR = "Auditor"
+ROLE_JEFE_REPUESTOS = "Jefe de Repuestos"
+
+ROLE_ALIASES = {
+    "Administrador": ROLE_ADMIN,
+    "Auditor": ROLE_AUDITOR,
+    "Jefe de Repuesto": ROLE_JEFE_REPUESTOS,
+    "Jefe de Repuestos": ROLE_JEFE_REPUESTOS,
+}
+
+ROLE_MODULES = {
+    ROLE_ADMIN: list(MODULE_META.keys()),
+    ROLE_AUDITOR: ["nuevo", "conteo", "justificaciones", "cierre", "dashboards"],
+    ROLE_JEFE_REPUESTOS: ["justificaciones", "cierre", "dashboards"],
+}
+
+def normalize_role(role: str) -> str:
+    return ROLE_ALIASES.get(str(role).strip(), str(role).strip())
+
+def allowed_modules_for_role(role: str) -> list[str]:
+    return ROLE_MODULES.get(normalize_role(role), [])
+
+def can_access_module(role: str, module: str) -> bool:
+    return module in allowed_modules_for_role(role)
+
 def inject_modern_theme():
     st.markdown(
         """
@@ -1186,7 +1212,7 @@ def login():
                         st.session_state["logged_in"] = True
                         st.session_state["usuario"] = usuario
                         st.session_state["nombre_usuario"] = creds["nombre"]
-                        st.session_state["rol"] = creds["rol"]
+                        st.session_state["rol"] = normalize_role(creds["rol"])
                         st.success(f"✅ Bienvenido, {creds['nombre']}!")
                         st.rerun()
                     else:
@@ -1201,7 +1227,7 @@ def login():
                 creds_data.append({
                     "Usuario (ID)": user_id,
                     "Contraseña": password,
-                    "Rol": USUARIOS_CREDENCIALES[user_id]["rol"],
+                    "Rol": normalize_role(USUARIOS_CREDENCIALES[user_id]["rol"]),
                     "Nombre": USUARIOS_CREDENCIALES[user_id]["nombre"],
                 })
             render_dataframe(pd.DataFrame(creds_data), use_container_width=True, hide_index=True)
@@ -1219,6 +1245,8 @@ inject_modern_theme()
 usuario_actual = st.session_state.get("usuario")
 nombre_actual = st.session_state.get("nombre_usuario")
 rol_actual = st.session_state.get("rol")
+rol_actual = normalize_role(rol_actual)
+st.session_state["rol"] = rol_actual
 
 # --- Admin debug: mostrar estado de datos (solo para admin)
 def _admin_debug_show():
@@ -1251,7 +1279,7 @@ def _admin_debug_show():
         except Exception as e:
             st.write(f"Audit_Log: error al leer: {e}")
 
-if rol_actual == "Administrador":
+if rol_actual == ROLE_ADMIN:
     _admin_debug_show()
     with st.sidebar.expander("Configuración BD", expanded=False):
         st.write("Backend activo:")
@@ -1575,16 +1603,18 @@ with st.sidebar:
     if "modulo_activo" not in st.session_state:
         st.session_state["modulo_activo"] = "nuevo"
 
-    if st.button(f"{MODULE_META['nuevo']['icon']}  {MODULE_META['nuevo']['label']}", use_container_width=True):
-        st.session_state["modulo_activo"] = "nuevo"
-    if st.button(f"{MODULE_META['conteo']['icon']}  {MODULE_META['conteo']['label']}", use_container_width=True):
-        st.session_state["modulo_activo"] = "conteo"
-    if st.button(f"{MODULE_META['justificaciones']['icon']}  {MODULE_META['justificaciones']['label']}", use_container_width=True):
-        st.session_state["modulo_activo"] = "justificaciones"
-    if st.button(f"{MODULE_META['cierre']['icon']}  {MODULE_META['cierre']['label']}", use_container_width=True):
-        st.session_state["modulo_activo"] = "cierre"
-    if st.button(f"{MODULE_META['dashboards']['icon']}  {MODULE_META['dashboards']['label']}", use_container_width=True):
-        st.session_state["modulo_activo"] = "dashboards"
+    modulos_permitidos = allowed_modules_for_role(rol_actual)
+    if not modulos_permitidos:
+        st.error("El rol actual no tiene permisos configurados.")
+        st.stop()
+
+    if st.session_state["modulo_activo"] not in modulos_permitidos:
+        st.session_state["modulo_activo"] = modulos_permitidos[0]
+
+    for module_key in modulos_permitidos:
+        module_meta = MODULE_META[module_key]
+        if st.button(f"{module_meta['icon']}  {module_meta['label']}", use_container_width=True):
+            st.session_state["modulo_activo"] = module_key
 
     st.write("---")
     st.write(f"**👤 Logueado como:** {nombre_actual}")
@@ -1596,6 +1626,9 @@ with st.sidebar:
         st.rerun()
 
 modulo_activo = st.session_state.get("modulo_activo", "nuevo")
+if not can_access_module(rol_actual, modulo_activo):
+    st.warning("No tenés permisos para acceder a este módulo.")
+    st.stop()
 render_page_header(modulo_activo, nombre_actual, rol_actual)
 
 # ----------------------------
@@ -1612,7 +1645,7 @@ if modulo_activo == "nuevo":
 
     st.divider()
 
-    if rol_actual not in ("Auditor", "Administrador"):
+    if rol_actual not in (ROLE_AUDITOR, ROLE_ADMIN):
         st.info("Solo Auditores pueden generar inventarios.")
     else:
         st.subheader("Importar Excel → ABC → Muestra 80/15/5")
@@ -1740,7 +1773,7 @@ if modulo_activo == "nuevo":
 elif modulo_activo == "conteo":
     st.subheader("Carga de conteo físico")
 
-    if rol_actual not in ("Auditor", "Administrador"):
+    if rol_actual not in (ROLE_AUDITOR, ROLE_ADMIN):
         st.info("Solo Auditores")
     else:
         df_abiertos = listar_inventarios_abiertos()
@@ -1845,7 +1878,7 @@ elif modulo_activo == "justificaciones":
                 render_dataframe(df_resumen, use_container_width=True, hide_index=True)
                 st.divider()
                 
-                if rol_actual == "Administrador":
+                if rol_actual == ROLE_ADMIN:
                     modo_admin = st.radio(
                         "Modo de trabajo",
                         options=["Cargar justificaciones", "Validar y ajustar"],
@@ -1855,7 +1888,7 @@ elif modulo_activo == "justificaciones":
                 else:
                     modo_admin = None
 
-                if rol_actual == "Jefe de Repuesto" or (rol_actual == "Administrador" and modo_admin == "Cargar justificaciones"):
+                if rol_actual == ROLE_JEFE_REPUESTOS or (rol_actual == ROLE_ADMIN and modo_admin == "Cargar justificaciones"):
                     st.write("**Ingresá justificaciones:**")
                     justificaciones_dict = {}
                     
@@ -2138,8 +2171,8 @@ elif modulo_activo == "justificaciones":
 elif modulo_activo == "cierre":
     st.subheader("Cierre + Reporte")
     
-    if rol_actual not in ("Auditor", "Administrador"):
-        st.info("Solo Auditores")
+    if rol_actual not in (ROLE_AUDITOR, ROLE_ADMIN, ROLE_JEFE_REPUESTOS):
+        st.info("No tenés permisos para ver reportes finales.")
     else:
         df_abiertos = listar_inventarios_abiertos()
         if df_abiertos.empty:
@@ -2296,10 +2329,13 @@ elif modulo_activo == "cierre":
                 )
 
                 st.divider()
-                if st.button("✅ Cerrar inventario"):
-                    cerrar_inventario(id_sel, usuario_actual)
-                    st.success("Cerrado")
-                    st.rerun()
+                if rol_actual in (ROLE_AUDITOR, ROLE_ADMIN):
+                    if st.button("✅ Cerrar inventario"):
+                        cerrar_inventario(id_sel, usuario_actual)
+                        st.success("Cerrado")
+                        st.rerun()
+                else:
+                    st.info("Tu perfil puede descargar el reporte final. El cierre del inventario queda reservado a Auditoría.")
 
 # ----------------------------
 # MÓDULO 5
