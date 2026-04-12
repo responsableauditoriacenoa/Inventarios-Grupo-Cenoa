@@ -20,8 +20,8 @@ st.set_page_config(page_title="Inventarios Rotativos - Grupo Cenoa", layout="wid
 # DB configurable: PostgreSQL/Supabase por DATABASE_URL, SQLite como fallback local
 DB_PATH = Path(__file__).resolve().parent / "inventarios.db"
 RAW_DATABASE_URL = (
-    os.getenv("DATABASE_URL")
-    or st.secrets.get("database", {}).get("url")
+    st.secrets.get("database", {}).get("url")
+    or os.getenv("DATABASE_URL")
     or f"sqlite:///{DB_PATH.as_posix()}"
 )
 DATABASE_URL = RAW_DATABASE_URL
