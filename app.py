@@ -43,6 +43,12 @@ C_DESC = "Descripción"
 C_STOCK = "Stock"
 C_COSTO = "Cto.Rep."
 
+COLUMN_ALIASES = {
+    "Art?culo": C_ART,
+    "Locaci?n": C_LOC,
+    "Descripci?n": C_DESC,
+}
+
 # Concesionarias y sucursales
 CONCESIONARIAS = {
     "Autolux": ["Ax Jujuy", "Ax Salta", "Ax Tartagal", "Ax Lajitas", "Ax Taller Movil"],
@@ -771,7 +777,12 @@ def read_gspread_worksheet(ws_name: str) -> pd.DataFrame:
         if not row:
             return pd.DataFrame()
         data = json.loads(row[0]) if row[0] else []
-        return pd.DataFrame(data) if data else pd.DataFrame()
+        if not data:
+            return pd.DataFrame()
+        df = pd.DataFrame(data)
+        if not df.empty:
+            df = df.rename(columns={col: COLUMN_ALIASES[col] for col in df.columns if col in COLUMN_ALIASES})
+        return df
     except Exception as e:
         st.error(f"Error reading {ws_name}: {e}")
         return pd.DataFrame()
