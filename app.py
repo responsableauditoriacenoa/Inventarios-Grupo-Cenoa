@@ -82,8 +82,14 @@ MODULE_META = {
         "title": "Cierre y Reporte",
         "description": "Consolidá resultados, evaluá exactitud y emití el reporte final del inventario.",
     },
+    "historial": {
+        "label": "5) Historial",
+        "icon": "📁",
+        "title": "Historial de Inventarios",
+        "description": "Consultá inventarios cerrados, resultados y detalle completo.",
+    },
     "dashboards": {
-        "label": "5) Dashboards",
+        "label": "6) Dashboards",
         "icon": "📊",
         "title": "Dashboards Ejecutivos",
         "description": "Visualizá KPIs clave, ranking de sucursales y desempeño general del proceso.",
@@ -103,8 +109,8 @@ ROLE_ALIASES = {
 
 ROLE_MODULES = {
     ROLE_ADMIN: list(MODULE_META.keys()),
-    ROLE_AUDITOR: ["nuevo", "conteo", "justificaciones", "cierre", "dashboards"],
-    ROLE_JEFE_REPUESTOS: ["justificaciones", "cierre", "dashboards"],
+    ROLE_AUDITOR: ["nuevo", "conteo", "justificaciones", "cierre", "historial", "dashboards"],
+    ROLE_JEFE_REPUESTOS: ["justificaciones", "cierre", "historial", "dashboards"],
 }
 
 def normalize_role(role: str) -> str:
@@ -1312,6 +1318,13 @@ def listar_inventarios_abiertos():
         return pd.DataFrame()
     return df_hist[df_hist["Estado"].astype(str).str.lower() == "abierto"].copy()
 
+def listar_inventarios_cerrados():
+    df_hist = read_gspread_worksheet(SHEET_HIST)
+    if df_hist.empty or "Estado" not in df_hist.columns:
+        return pd.DataFrame()
+    estados = df_hist["Estado"].astype(str).str.strip().str.lower()
+    return df_hist[estados == "cerrado"].copy()
+
 def cargar_detalle(id_inv: str) -> pd.DataFrame:
     df = read_gspread_worksheet(SHEET_DET)
     if df.empty or "ID_Inventario" not in df.columns:
@@ -1486,6 +1499,144 @@ def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
         "canjes": canjes_list
     }
 
+def build_report_xlsx(df_det: pd.DataFrame, resultados: dict) -> io.BytesIO:
+    from openpyxl import Workbook
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    buffer = io.BytesIO()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Resultado"
+
+    title_font = Font(size=14, bold=True)
+    light_red = PatternFill(start_color="FFF2F2", end_color="FFF2F2", fill_type="solid")
+    bold = Font(bold=True)
+    center = Alignment(horizontal="center", vertical="center")
+    thin = Side(border_style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    ws.merge_cells("A1:D1")
+    ws["A1"] = "4. Resultado Inventario Rotativo"
+    ws["A1"].font = title_font
+    ws["A1"].alignment = center
+
+    ws["A3"] = "Resultado:"
+
+    start_row = 5
+    ws[f"A{start_row}"] = "Detalle"
+    ws[f"B{start_row}"] = "Cant"
+    ws[f"C{start_row}"] = "$"
+    ws[f"D{start_row}"] = "%"
+    for col in ["A", "B", "C", "D"]:
+        cell = ws[f"{col}{start_row}"]
+        cell.font = bold
+        cell.alignment = center
+        cell.border = border
+
+    rows = [
+        ("Muestra", resultados["cant_muestra"], resultados["valor_muestra"], resultados["pct_muestra"] / 100),
+        ("Faltantes", resultados["cant_faltantes"], resultados["valor_faltantes"], resultados["pct_faltantes"] / 100),
+        ("Sobrantes", resultados["cant_sobrantes"], resultados["valor_sobrantes"], resultados["pct_sobrantes"] / 100),
+        ("Dif Neta", resultados["cant_dif_neta"], resultados["valor_dif_neta"], resultados["pct_dif_neta"] / 100),
+        ("Dif Absoluta", resultados["cant_dif_absoluta"], resultados["valor_dif_absoluta"], resultados["pct_dif_absoluta"] / 100),
+    ]
+
+    for i, r in enumerate(rows, start=start_row + 1):
+        ws[f"A{i}"] = r[0]
+        ws[f"B{i}"] = r[1]
+        ws[f"C{i}"] = r[2]
+        ws[f"D{i}"] = r[3]
+        ws[f"B{i}"].alignment = center
+        ws[f"C{i}"].number_format = '#,##0.00'
+        ws[f"D{i}"].number_format = "0.00%"
+        for col in ["A", "B", "C", "D"]:
+            ws[f"{col}{i}"].border = border
+
+    for r in [start_row + 3, start_row + 4]:
+        for col in ["B", "C", "D"]:
+            ws[f"{col}{r}"].fill = light_red
+
+    ws.merge_cells(f"F{start_row + 1}:G{start_row + 1}")
+    ws[f"F{start_row + 1}"] = f"{resultados['grado']}%"
+    ws[f"F{start_row + 1}"].font = Font(size=12, bold=True)
+    ws[f"F{start_row + 1}"].alignment = center
+
+    escala_start = start_row + 7
+    ws[f"B{escala_start}"] = "Dif. Abs. desde"
+    ws[f"C{escala_start}"] = "Grado de cumplim."
+    ws[f"B{escala_start}"].font = bold
+    ws[f"C{escala_start}"].font = bold
+    for j, (th, g) in enumerate(resultados.get("escala", []), start=escala_start + 1):
+        ws[f"B{j}"] = f"{th:.2f}%"
+        ws[f"C{j}"] = f"{g}%"
+        ws[f"B{j}"].alignment = center
+        ws[f"C{j}"].alignment = center
+
+    ws2 = wb.create_sheet(title="Detalle")
+    numeric_cols = {}
+    for col_idx, col_name in enumerate(df_det.columns, start=1):
+        try:
+            numeric_test = pd.to_numeric(df_det[col_name], errors="coerce")
+            if numeric_test.notna().sum() > 0:
+                numeric_cols[col_idx] = col_name
+        except Exception:
+            pass
+
+    for r_idx, row in enumerate(dataframe_to_rows(df_det, index=False, header=True), start=1):
+        for c_idx, value in enumerate(row, start=1):
+            cell = ws2.cell(row=r_idx, column=c_idx, value=value)
+            if r_idx == 1:
+                cell.font = Font(bold=True)
+            if c_idx in numeric_cols:
+                try:
+                    num_val = float(value) if value not in (None, "", "NaN", "nan") else None
+                    if num_val is not None and str(num_val) not in ("nan", "inf", "-inf"):
+                        cell.value = num_val
+                        cell.number_format = '#,##0.00'
+                except Exception:
+                    pass
+
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+
+def construir_resumen_historial(df_hist_cerrados: pd.DataFrame | None = None) -> pd.DataFrame:
+    if df_hist_cerrados is None:
+        df_hist_cerrados = listar_inventarios_cerrados()
+    if df_hist_cerrados.empty:
+        return pd.DataFrame()
+
+    resumen = []
+    for _, row in df_hist_cerrados.copy().iterrows():
+        id_inv = str(row.get("ID_Inventario", ""))
+        df_det = cargar_detalle(id_inv)
+        resultados = calcular_resultados_inventario(df_det) if not df_det.empty else {}
+
+        resumen.append({
+            "ID_Inventario": id_inv,
+            "Fecha": row.get("Fecha", ""),
+            "Cierre_Fecha": row.get("Cierre_Fecha", ""),
+            "Concesionaria": row.get("Concesionaria", ""),
+            "Sucursal": row.get("Sucursal", ""),
+            "Auditor": row.get("Auditor", ""),
+            "Cierre_Usuario": row.get("Cierre_Usuario", ""),
+            "Lineas": len(df_det),
+            "Muestra Q": resultados.get("cant_muestra", row.get("Cierre_Muestra_Q", 0)),
+            "Valor Muestra": resultados.get("valor_muestra", row.get("Cierre_Valor_Muestra", 0)),
+            "Faltantes Q": resultados.get("cant_faltantes", row.get("Cierre_Faltantes_Q", 0)),
+            "Sobrantes Q": resultados.get("cant_sobrantes", row.get("Cierre_Sobrantes_Q", 0)),
+            "Dif Neta Q": resultados.get("cant_dif_neta", row.get("Cierre_Dif_Neta_Q", 0)),
+            "Dif Absoluta Q": resultados.get("cant_dif_absoluta", row.get("Cierre_Dif_Absoluta_Q", 0)),
+            "Valor Dif Absoluta": resultados.get("valor_dif_absoluta", row.get("Cierre_Valor_Dif_Absoluta", 0)),
+            "Exactitud": resultados.get("grado", row.get("Cierre_Exactitud", 0)),
+        })
+
+    df_resumen = pd.DataFrame(resumen)
+    if "Cierre_Fecha" in df_resumen.columns:
+        df_resumen = df_resumen.sort_values("Cierre_Fecha", ascending=False)
+    return df_resumen
+
 def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
     """Update inventory details"""
     try:
@@ -1518,6 +1669,25 @@ def cerrar_inventario(id_inv: str, usuario: str):
     df_hist.loc[mask, "Estado"] = "Cerrado"
     df_hist.loc[mask, "Cierre_Fecha"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     df_hist.loc[mask, "Cierre_Usuario"] = usuario
+    df_det = cargar_detalle(id_inv)
+    if not df_det.empty:
+        resultados = calcular_resultados_inventario(df_det)
+        cierre_cols = {
+            "Cierre_Lineas": len(df_det),
+            "Cierre_Muestra_Q": resultados.get("cant_muestra", 0),
+            "Cierre_Valor_Muestra": resultados.get("valor_muestra", 0),
+            "Cierre_Faltantes_Q": resultados.get("cant_faltantes", 0),
+            "Cierre_Valor_Faltantes": resultados.get("valor_faltantes", 0),
+            "Cierre_Sobrantes_Q": resultados.get("cant_sobrantes", 0),
+            "Cierre_Valor_Sobrantes": resultados.get("valor_sobrantes", 0),
+            "Cierre_Dif_Neta_Q": resultados.get("cant_dif_neta", 0),
+            "Cierre_Valor_Dif_Neta": resultados.get("valor_dif_neta", 0),
+            "Cierre_Dif_Absoluta_Q": resultados.get("cant_dif_absoluta", 0),
+            "Cierre_Valor_Dif_Absoluta": resultados.get("valor_dif_absoluta", 0),
+            "Cierre_Exactitud": resultados.get("grado", 0),
+        }
+        for col, value in cierre_cols.items():
+            df_hist.loc[mask, col] = value
     ok, msg = write_gspread_worksheet(SHEET_HIST, df_hist)
     log_audit("cerrar_inventario", id_inv, 0, "OK" if ok else "ERROR", msg if msg else "Cerró inventario")
 
@@ -2355,6 +2525,119 @@ elif modulo_activo == "cierre":
 
 # ----------------------------
 # MÓDULO 5
+# ----------------------------
+elif modulo_activo == "historial":
+    st.subheader("Historial de Inventarios Cerrados")
+
+    if rol_actual not in (ROLE_AUDITOR, ROLE_ADMIN, ROLE_JEFE_REPUESTOS):
+        st.info("No tenes permisos para consultar el historial.")
+    else:
+        df_cerrados = listar_inventarios_cerrados()
+        if df_cerrados.empty:
+            st.info("Todavia no hay inventarios cerrados para consultar.")
+        else:
+            df_resumen = construir_resumen_historial(df_cerrados)
+
+            st.write("### Resumen general")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Inventarios Cerrados", len(df_resumen))
+            col2.metric("Lineas auditadas", int(pd.to_numeric(df_resumen.get("Lineas", 0), errors="coerce").fillna(0).sum()))
+            col3.metric("Valuacion muestra", format_currency_ar(pd.to_numeric(df_resumen.get("Valor Muestra", 0), errors="coerce").fillna(0).sum()))
+            exactitud_prom = pd.to_numeric(df_resumen.get("Exactitud", 0), errors="coerce").fillna(0).mean() if not df_resumen.empty else 0
+            col4.metric("Exactitud promedio", f"{exactitud_prom:.1f}%")
+
+            st.divider()
+            f1, f2 = st.columns(2)
+            with f1:
+                sucursales = sorted([s for s in df_resumen.get("Sucursal", pd.Series(dtype=str)).dropna().astype(str).unique() if s])
+                sucursal_filtro = st.selectbox("Filtrar por sucursal", ["Todas"] + sucursales)
+            with f2:
+                concesionarias = sorted([c for c in df_resumen.get("Concesionaria", pd.Series(dtype=str)).dropna().astype(str).unique() if c])
+                concesionaria_filtro = st.selectbox("Filtrar por concesionaria", ["Todas"] + concesionarias)
+
+            df_filtrado = df_resumen.copy()
+            if sucursal_filtro != "Todas":
+                df_filtrado = df_filtrado[df_filtrado["Sucursal"].astype(str) == sucursal_filtro]
+            if concesionaria_filtro != "Todas":
+                df_filtrado = df_filtrado[df_filtrado["Concesionaria"].astype(str) == concesionaria_filtro]
+
+            cols_resumen = [
+                "ID_Inventario", "Fecha", "Cierre_Fecha", "Concesionaria", "Sucursal",
+                "Auditor", "Cierre_Usuario", "Lineas", "Muestra Q", "Valor Muestra",
+                "Faltantes Q", "Sobrantes Q", "Dif Neta Q", "Dif Absoluta Q",
+                "Valor Dif Absoluta", "Exactitud",
+            ]
+            cols_resumen = [c for c in cols_resumen if c in df_filtrado.columns]
+            render_dataframe(df_filtrado[cols_resumen], use_container_width=True, hide_index=True)
+
+            if df_filtrado.empty:
+                st.info("No hay inventarios cerrados para los filtros seleccionados.")
+            else:
+                st.divider()
+                id_options = df_filtrado["ID_Inventario"].astype(str).tolist()
+                id_sel = st.selectbox("Consultar inventario cerrado", id_options, key="historial_id")
+                df_det = cargar_detalle(id_sel)
+                fila_hist = df_resumen[df_resumen["ID_Inventario"].astype(str) == str(id_sel)]
+                resultados = calcular_resultados_inventario(df_det) if not df_det.empty else {}
+
+                if not fila_hist.empty:
+                    meta = fila_hist.iloc[0]
+                    st.write("### Resumen del inventario")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Sucursal", str(meta.get("Sucursal", "")))
+                    m2.metric("Cierre", str(meta.get("Cierre_Fecha", "")))
+                    m3.metric("Valor muestra", format_currency_ar(resultados.get("valor_muestra", meta.get("Valor Muestra", 0))))
+                    m4.metric("Exactitud", f"{resultados.get('grado', meta.get('Exactitud', 0))}%")
+
+                if df_det.empty:
+                    st.warning("El inventario cerrado no tiene detalle asociado.")
+                else:
+                    tabla_resultados = pd.DataFrame([
+                        {"Detalle": "Muestra", "Q": resultados["cant_muestra"], "$ Ajuste": format_currency_ar(resultados["valor_muestra"]), "%": f"{resultados['pct_muestra']:.2f}%"},
+                        {"Detalle": "Faltantes", "Q": resultados["cant_faltantes"], "$ Ajuste": format_currency_ar(resultados["valor_faltantes"]), "%": f"{resultados['pct_faltantes']:.2f}%"},
+                        {"Detalle": "Sobrantes", "Q": resultados["cant_sobrantes"], "$ Ajuste": format_currency_ar(resultados["valor_sobrantes"]), "%": f"{resultados['pct_sobrantes']:.2f}%"},
+                        {"Detalle": "Dif Neta", "Q": resultados["cant_dif_neta"], "$ Ajuste": format_currency_ar(resultados["valor_dif_neta"]), "%": f"{resultados['pct_dif_neta']:.2f}%"},
+                        {"Detalle": "Dif Absoluta", "Q": resultados["cant_dif_absoluta"], "$ Ajuste": format_currency_ar(resultados["valor_dif_absoluta"]), "%": f"{resultados['pct_dif_absoluta']:.2f}%"},
+                    ])
+                    render_dataframe(tabla_resultados, use_container_width=True, hide_index=True)
+
+                    if resultados.get("canjes"):
+                        st.write("### Canjes")
+                        render_dataframe(pd.DataFrame(resultados["canjes"]), use_container_width=True, hide_index=True)
+
+                    st.write("### Detalle completo")
+                    render_dataframe(df_det, use_container_width=True, hide_index=True)
+
+                    st.write("### Descargas")
+                    dl1, dl2 = st.columns(2)
+                    with dl1:
+                        xlsx_data = build_report_xlsx(df_det, resultados)
+                        st.download_button(
+                            "Descargar reporte XLSX",
+                            data=xlsx_data,
+                            file_name=f"Reporte_{id_sel}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"hist_report_{id_sel}",
+                        )
+                    with dl2:
+                        detalle_data = export_dataframe_to_excel(df_det, sheet_name="Detalle", title=f"Detalle Inventario {id_sel}")
+                        st.download_button(
+                            "Descargar detalle XLSX",
+                            data=detalle_data,
+                            file_name=f"Detalle_{id_sel}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key=f"hist_detail_{id_sel}",
+                        )
+
+                df_audit = read_gspread_worksheet(SHEET_AUDIT)
+                if not df_audit.empty and "ID_Inventario" in df_audit.columns:
+                    audit_inv = df_audit[df_audit["ID_Inventario"].astype(str) == str(id_sel)].copy()
+                    if not audit_inv.empty:
+                        st.write("### Movimientos registrados")
+                        render_dataframe(audit_inv.sort_values("Timestamp", ascending=False), use_container_width=True, hide_index=True)
+
+# ----------------------------
+# MODULO 6
 # ----------------------------
 elif modulo_activo == "dashboards":
     st.subheader("Dashboards")
