@@ -1657,6 +1657,17 @@ def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
         log_audit("guardar_detalle", id_inv, 0, "ERROR", str(e))
         return False
 
+def set_detalle_value(df: pd.DataFrame, row_idx, column: str, value):
+    """Set a detail value preserving the original row index used by the UI."""
+    if column not in df.columns:
+        df[column] = ""
+    if row_idx in df.index:
+        df.at[row_idx, column] = value
+        return
+    mask = df.index == row_idx
+    if mask.any():
+        df.loc[mask, column] = value
+
 def cerrar_inventario(id_inv: str, usuario: str):
     """Close inventory"""
     df_hist = read_gspread_worksheet(SHEET_HIST)
@@ -2097,7 +2108,7 @@ elif modulo_activo == "justificaciones":
                     if st.button("💾 Guardar justificaciones"):
                         df_det2 = df_det.copy()
                         for idx, just in justificaciones_dict.items():
-                            df_det2.loc[df_det2.index == idx, "Justificacion"] = just
+                            set_detalle_value(df_det2, idx, "Justificacion", just)
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
@@ -2280,9 +2291,9 @@ elif modulo_activo == "justificaciones":
 
                         df_det2 = df_det.copy()
                         for idx, val in validaciones_dict.items():
-                            df_det2.loc[df_det2.index == idx, "Justif_Validada"] = val
-                            df_det2.loc[df_det2.index == idx, "Validador"] = usuario_actual
-                            df_det2.loc[df_det2.index == idx, "Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                            set_detalle_value(df_det2, idx, "Justif_Validada", val)
+                            set_detalle_value(df_det2, idx, "Validador", usuario_actual)
+                            set_detalle_value(df_det2, idx, "Fecha_Validacion", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
                             if idx in ajustes_dict:
                                 (
                                     tipo,
@@ -2295,41 +2306,41 @@ elif modulo_activo == "justificaciones":
                                     canje_codigo_adic,
                                     canje_info_adic,
                                 ) = ajustes_dict[idx]
-                                df_det2.loc[df_det2.index == idx, "Tipo_Ajuste"] = tipo
-                                df_det2.loc[df_det2.index == idx, "Ajuste_Cantidad"] = cantidad
+                                set_detalle_value(df_det2, idx, "Tipo_Ajuste", tipo)
+                                set_detalle_value(df_det2, idx, "Ajuste_Cantidad", cantidad)
                                 if tipo == "Canje" and canje_info:
-                                    df_det2.loc[df_det2.index == idx, "Canje_Articulo"] = canje_info["codigo"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = canje_info["descripcion"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = canje_info["costo"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = canje_info["stock"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Locacion"] = canje_info["locacion"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad"] = -float(cantidad)
+                                    set_detalle_value(df_det2, idx, "Canje_Articulo", canje_info["codigo"])
+                                    set_detalle_value(df_det2, idx, "Canje_Descripcion", canje_info["descripcion"])
+                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep", canje_info["costo"])
+                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base", canje_info["stock"])
+                                    set_detalle_value(df_det2, idx, "Canje_Locacion", canje_info["locacion"])
+                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad", -float(cantidad))
                                 else:
-                                    df_det2.loc[df_det2.index == idx, "Canje_Articulo"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Descripcion"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Stock_Base"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Locacion"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad"] = ""
+                                    set_detalle_value(df_det2, idx, "Canje_Articulo", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Descripcion", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Locacion", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad", "")
 
-                                df_det2.loc[df_det2.index == idx, "Requiere_Ajuste_Adicional"] = requiere_adicional
-                                df_det2.loc[df_det2.index == idx, "Tipo_Ajuste_Adicional"] = tipo_ajuste_adic
-                                df_det2.loc[df_det2.index == idx, "Ajuste_Cantidad_Adicional"] = ajuste_cant_adic
+                                set_detalle_value(df_det2, idx, "Requiere_Ajuste_Adicional", requiere_adicional)
+                                set_detalle_value(df_det2, idx, "Tipo_Ajuste_Adicional", tipo_ajuste_adic)
+                                set_detalle_value(df_det2, idx, "Ajuste_Cantidad_Adicional", ajuste_cant_adic)
 
                                 if requiere_adicional == "SI" and tipo_ajuste_adic == "Canje" and canje_info_adic:
-                                    df_det2.loc[df_det2.index == idx, "Canje_Articulo_Adicional"] = canje_info_adic["codigo"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Descripcion_Adicional"] = canje_info_adic["descripcion"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep_Adicional"] = canje_info_adic["costo"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Stock_Base_Adicional"] = canje_info_adic["stock"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Locacion_Adicional"] = canje_info_adic["locacion"]
-                                    df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad_Adicional"] = -float(ajuste_cant_adic)
+                                    set_detalle_value(df_det2, idx, "Canje_Articulo_Adicional", canje_info_adic["codigo"])
+                                    set_detalle_value(df_det2, idx, "Canje_Descripcion_Adicional", canje_info_adic["descripcion"])
+                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep_Adicional", canje_info_adic["costo"])
+                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base_Adicional", canje_info_adic["stock"])
+                                    set_detalle_value(df_det2, idx, "Canje_Locacion_Adicional", canje_info_adic["locacion"])
+                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad_Adicional", -float(ajuste_cant_adic))
                                 else:
-                                    df_det2.loc[df_det2.index == idx, "Canje_Articulo_Adicional"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Descripcion_Adicional"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Costo_Rep_Adicional"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Stock_Base_Adicional"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Locacion_Adicional"] = ""
-                                    df_det2.loc[df_det2.index == idx, "Canje_Ajuste_Cantidad_Adicional"] = ""
+                                    set_detalle_value(df_det2, idx, "Canje_Articulo_Adicional", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Descripcion_Adicional", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep_Adicional", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base_Adicional", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Locacion_Adicional", "")
+                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad_Adicional", "")
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
