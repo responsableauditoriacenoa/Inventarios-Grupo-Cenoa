@@ -1334,10 +1334,16 @@ def listar_inventarios_cerrados():
     estados = df_hist["Estado"].astype(str).str.strip().str.lower()
     return df_hist[estados == "cerrado"].copy()
 
+def ensure_unique_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
+    return df.loc[:, ~pd.Index(df.columns).duplicated(keep="last")].copy()
+
 def cargar_detalle(id_inv: str) -> pd.DataFrame:
     df = read_gspread_worksheet(SHEET_DET)
     if df.empty or "ID_Inventario" not in df.columns:
         return pd.DataFrame()
+    df = ensure_unique_columns(df)
     return df[df["ID_Inventario"].astype(str) == str(id_inv)].copy()
 
 def calcular_resultados_inventario(df_det: pd.DataFrame) -> dict:
@@ -2088,6 +2094,7 @@ elif modulo_activo == "justificaciones":
     else:
         id_sel = st.selectbox("Seleccionar", df_abiertos["ID_Inventario"].astype(str).tolist(), key="tab3")
         df_det = cargar_detalle(id_sel)
+        df_det = ensure_unique_columns(df_det)
         df_det = df_det.reset_index(drop=True).copy()
         df_det["__row_pos__"] = np.arange(len(df_det))
 
