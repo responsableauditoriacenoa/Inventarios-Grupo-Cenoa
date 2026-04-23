@@ -2088,6 +2088,8 @@ elif modulo_activo == "justificaciones":
     else:
         id_sel = st.selectbox("Seleccionar", df_abiertos["ID_Inventario"].astype(str).tolist(), key="tab3")
         df_det = cargar_detalle(id_sel)
+        df_det = df_det.reset_index(drop=True).copy()
+        df_det["__row_pos__"] = np.arange(len(df_det))
 
         if df_det.empty:
             st.warning("No hay detalle")
@@ -2120,7 +2122,8 @@ elif modulo_activo == "justificaciones":
                     st.write("**Ingresá justificaciones:**")
                     justificaciones_dict = {}
                     
-                    for idx, row in df_dif.iterrows():
+                    for _, row in df_dif.iterrows():
+                        row_pos = int(row["__row_pos__"])
                         art = row[C_ART]
                         loc = row[C_LOC]
                         dif = row["Diferencia"]
@@ -2131,15 +2134,16 @@ elif modulo_activo == "justificaciones":
                             f"Justificación",
                             value=just_actual,
                             height=80,
-                            key=f"just_{idx}"
+                            key=f"just_{row_pos}"
                         )
-                        justificaciones_dict[idx] = just
+                        justificaciones_dict[row_pos] = just
                         st.divider()
                     
                     if st.button("💾 Guardar justificaciones"):
                         df_det2 = df_det.copy()
-                        for idx, just in justificaciones_dict.items():
-                            set_detalle_value(df_det2, idx, "Justificacion", just)
+                        for row_pos, just in justificaciones_dict.items():
+                            df_det2.loc[df_det2["__row_pos__"] == row_pos, "Justificacion"] = normalize_cell_value(just)
+                        df_det2 = df_det2.drop(columns=["__row_pos__"], errors="ignore")
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
@@ -2166,7 +2170,8 @@ elif modulo_activo == "justificaciones":
                     ajustes_dict = {}
                     canjes_invalidos = []
                     
-                    for idx, row in df_dif.iterrows():
+                    for _, row in df_dif.iterrows():
+                        row_pos = int(row["__row_pos__"])
                         art = row[C_ART]
                         loc = row[C_LOC]
                         dif = row.get("Diferencia", 0)
@@ -2190,7 +2195,7 @@ elif modulo_activo == "justificaciones":
                                 "¿Validada?",
                                 options=["", "SI", "NO"],
                                 index=(["", "SI", "NO"].index(val_actual) if val_actual in ["SI", "NO"] else 0),
-                                key=f"val_{idx}"
+                                key=f"val_{row_pos}"
                             )
                         
                         # Habilitar ajuste solo si Justif_Validada es "SI"
@@ -2200,7 +2205,7 @@ elif modulo_activo == "justificaciones":
                                     "Tipo de Ajuste",
                                     options=["", "Ajuste", "Canje", "Sin Ajuste"],
                                     index=(["", "Ajuste", "Canje", "Sin Ajuste"].index(tipo_ajuste_actual) if tipo_ajuste_actual in ["Ajuste", "Canje", "Sin Ajuste"] else 0),
-                                    key=f"tipo_ajuste_{idx}"
+                                    key=f"tipo_ajuste_{row_pos}"
                                 )
                             
                             # Mostrar campo numérico solo si elige "Ajuste" o "Canje"
@@ -2209,7 +2214,7 @@ elif modulo_activo == "justificaciones":
                                     f"Cantidad a {tipo_ajuste.lower()} (neg. faltante, pos. sobrante)",
                                     value=float(ajuste_cant_actual) if ajuste_cant_actual else 0.0,
                                     step=1.0,
-                                    key=f"ajuste_cant_{idx}"
+                                    key=f"ajuste_cant_{row_pos}"
                                 )
                             else:
                                 ajuste_cant = 0.0
@@ -2221,7 +2226,7 @@ elif modulo_activo == "justificaciones":
                                 canje_codigo = st.text_input(
                                     "Código de artículo para canje",
                                     value=str(canje_codigo_actual) if canje_codigo_actual is not None else "",
-                                    key=f"canje_codigo_{idx}",
+                                    key=f"canje_codigo_{row_pos}",
                                     placeholder="Ingresá código de artículo",
                                 )
 
@@ -2237,13 +2242,13 @@ elif modulo_activo == "justificaciones":
                                     st.write(f"**Cantidad a ajustar artículo de canje:** {format_number_ar(-ajuste_cant)}")
                                 elif canje_codigo.strip():
                                     st.error("Código no encontrado en la base completa del Excel importado.")
-                                    canjes_invalidos.append(idx)
+                                canjes_invalidos.append(row_pos)
 
                             requiere_adicional = st.selectbox(
                                 "¿Requiere ajustes adicionales?",
                                 options=["NO", "SI"],
                                 index=(1 if str(requiere_ajuste_adic_actual).upper() == "SI" else 0),
-                                key=f"requiere_adicional_{idx}",
+                                key=f"requiere_adicional_{row_pos}",
                             )
 
                             tipo_ajuste_adic = ""
@@ -2256,7 +2261,7 @@ elif modulo_activo == "justificaciones":
                                     "Tipo de ajuste adicional",
                                     options=["", "Ajuste", "Canje", "Sin Ajuste"],
                                     index=( ["", "Ajuste", "Canje", "Sin Ajuste"].index(tipo_ajuste_adic_actual) if tipo_ajuste_adic_actual in ["", "Ajuste", "Canje", "Sin Ajuste"] else 0),
-                                    key=f"tipo_ajuste_adic_{idx}",
+                                    key=f"tipo_ajuste_adic_{row_pos}",
                                 )
 
                                 if tipo_ajuste_adic in ("Ajuste", "Canje"):
@@ -2264,7 +2269,7 @@ elif modulo_activo == "justificaciones":
                                         f"Cantidad de ajuste adicional ({tipo_ajuste_adic.lower()})",
                                         value=float(ajuste_cant_adic_actual) if ajuste_cant_adic_actual else 0.0,
                                         step=1.0,
-                                        key=f"ajuste_cant_adic_{idx}",
+                                        key=f"ajuste_cant_adic_{row_pos}",
                                     )
                                 else:
                                     tipo_ajuste_adic = "Sin Ajuste" if tipo_ajuste_adic == "" else tipo_ajuste_adic
@@ -2273,7 +2278,7 @@ elif modulo_activo == "justificaciones":
                                     canje_codigo_adic = st.text_input(
                                         "Código de artículo para canje adicional",
                                         value=str(canje_codigo_adic_actual) if canje_codigo_adic_actual is not None else "",
-                                        key=f"canje_codigo_adic_{idx}",
+                                        key=f"canje_codigo_adic_{row_pos}",
                                         placeholder="Ingresá código de artículo",
                                     )
 
@@ -2289,7 +2294,7 @@ elif modulo_activo == "justificaciones":
                                         st.write(f"**Cantidad adicional artículo de canje:** {format_number_ar(-ajuste_cant_adic)}")
                                     elif canje_codigo_adic.strip():
                                         st.error("Código adicional no encontrado en la base completa del Excel importado.")
-                                        canjes_invalidos.append(idx)
+                                        canjes_invalidos.append(row_pos)
                         else:
                             tipo_ajuste = ""
                             ajuste_cant = 0.0
@@ -2301,8 +2306,8 @@ elif modulo_activo == "justificaciones":
                             canje_codigo_adic = ""
                             canje_info_adic = None
                         
-                        validaciones_dict[idx] = val
-                        ajustes_dict[idx] = (
+                        validaciones_dict[row_pos] = val
+                        ajustes_dict[row_pos] = (
                             tipo_ajuste,
                             ajuste_cant,
                             canje_codigo,
@@ -2321,11 +2326,12 @@ elif modulo_activo == "justificaciones":
                             st.stop()
 
                         df_det2 = df_det.copy()
-                        for idx, val in validaciones_dict.items():
-                            set_detalle_value(df_det2, idx, "Justif_Validada", val)
-                            set_detalle_value(df_det2, idx, "Validador", usuario_actual)
-                            set_detalle_value(df_det2, idx, "Fecha_Validacion", datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
-                            if idx in ajustes_dict:
+                        for row_pos, val in validaciones_dict.items():
+                            mask_row = df_det2["__row_pos__"] == row_pos
+                            df_det2.loc[mask_row, "Justif_Validada"] = normalize_cell_value(val)
+                            df_det2.loc[mask_row, "Validador"] = usuario_actual
+                            df_det2.loc[mask_row, "Fecha_Validacion"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                            if row_pos in ajustes_dict:
                                 (
                                     tipo,
                                     cantidad,
@@ -2336,42 +2342,43 @@ elif modulo_activo == "justificaciones":
                                     ajuste_cant_adic,
                                     canje_codigo_adic,
                                     canje_info_adic,
-                                ) = ajustes_dict[idx]
-                                set_detalle_value(df_det2, idx, "Tipo_Ajuste", tipo)
-                                set_detalle_value(df_det2, idx, "Ajuste_Cantidad", cantidad)
+                                ) = ajustes_dict[row_pos]
+                                df_det2.loc[mask_row, "Tipo_Ajuste"] = normalize_cell_value(tipo)
+                                df_det2.loc[mask_row, "Ajuste_Cantidad"] = normalize_cell_value(cantidad)
                                 if tipo == "Canje" and canje_info:
-                                    set_detalle_value(df_det2, idx, "Canje_Articulo", canje_info["codigo"])
-                                    set_detalle_value(df_det2, idx, "Canje_Descripcion", canje_info["descripcion"])
-                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep", canje_info["costo"])
-                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base", canje_info["stock"])
-                                    set_detalle_value(df_det2, idx, "Canje_Locacion", canje_info["locacion"])
-                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad", -float(cantidad))
+                                    df_det2.loc[mask_row, "Canje_Articulo"] = normalize_cell_value(canje_info["codigo"])
+                                    df_det2.loc[mask_row, "Canje_Descripcion"] = normalize_cell_value(canje_info["descripcion"])
+                                    df_det2.loc[mask_row, "Canje_Costo_Rep"] = normalize_cell_value(canje_info["costo"])
+                                    df_det2.loc[mask_row, "Canje_Stock_Base"] = normalize_cell_value(canje_info["stock"])
+                                    df_det2.loc[mask_row, "Canje_Locacion"] = normalize_cell_value(canje_info["locacion"])
+                                    df_det2.loc[mask_row, "Canje_Ajuste_Cantidad"] = normalize_cell_value(-float(cantidad))
                                 else:
-                                    set_detalle_value(df_det2, idx, "Canje_Articulo", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Descripcion", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Locacion", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad", "")
+                                    df_det2.loc[mask_row, "Canje_Articulo"] = ""
+                                    df_det2.loc[mask_row, "Canje_Descripcion"] = ""
+                                    df_det2.loc[mask_row, "Canje_Costo_Rep"] = ""
+                                    df_det2.loc[mask_row, "Canje_Stock_Base"] = ""
+                                    df_det2.loc[mask_row, "Canje_Locacion"] = ""
+                                    df_det2.loc[mask_row, "Canje_Ajuste_Cantidad"] = ""
 
-                                set_detalle_value(df_det2, idx, "Requiere_Ajuste_Adicional", requiere_adicional)
-                                set_detalle_value(df_det2, idx, "Tipo_Ajuste_Adicional", tipo_ajuste_adic)
-                                set_detalle_value(df_det2, idx, "Ajuste_Cantidad_Adicional", ajuste_cant_adic)
+                                df_det2.loc[mask_row, "Requiere_Ajuste_Adicional"] = normalize_cell_value(requiere_adicional)
+                                df_det2.loc[mask_row, "Tipo_Ajuste_Adicional"] = normalize_cell_value(tipo_ajuste_adic)
+                                df_det2.loc[mask_row, "Ajuste_Cantidad_Adicional"] = normalize_cell_value(ajuste_cant_adic)
 
                                 if requiere_adicional == "SI" and tipo_ajuste_adic == "Canje" and canje_info_adic:
-                                    set_detalle_value(df_det2, idx, "Canje_Articulo_Adicional", canje_info_adic["codigo"])
-                                    set_detalle_value(df_det2, idx, "Canje_Descripcion_Adicional", canje_info_adic["descripcion"])
-                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep_Adicional", canje_info_adic["costo"])
-                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base_Adicional", canje_info_adic["stock"])
-                                    set_detalle_value(df_det2, idx, "Canje_Locacion_Adicional", canje_info_adic["locacion"])
-                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad_Adicional", -float(ajuste_cant_adic))
+                                    df_det2.loc[mask_row, "Canje_Articulo_Adicional"] = normalize_cell_value(canje_info_adic["codigo"])
+                                    df_det2.loc[mask_row, "Canje_Descripcion_Adicional"] = normalize_cell_value(canje_info_adic["descripcion"])
+                                    df_det2.loc[mask_row, "Canje_Costo_Rep_Adicional"] = normalize_cell_value(canje_info_adic["costo"])
+                                    df_det2.loc[mask_row, "Canje_Stock_Base_Adicional"] = normalize_cell_value(canje_info_adic["stock"])
+                                    df_det2.loc[mask_row, "Canje_Locacion_Adicional"] = normalize_cell_value(canje_info_adic["locacion"])
+                                    df_det2.loc[mask_row, "Canje_Ajuste_Cantidad_Adicional"] = normalize_cell_value(-float(ajuste_cant_adic))
                                 else:
-                                    set_detalle_value(df_det2, idx, "Canje_Articulo_Adicional", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Descripcion_Adicional", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Costo_Rep_Adicional", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Stock_Base_Adicional", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Locacion_Adicional", "")
-                                    set_detalle_value(df_det2, idx, "Canje_Ajuste_Cantidad_Adicional", "")
+                                    df_det2.loc[mask_row, "Canje_Articulo_Adicional"] = ""
+                                    df_det2.loc[mask_row, "Canje_Descripcion_Adicional"] = ""
+                                    df_det2.loc[mask_row, "Canje_Costo_Rep_Adicional"] = ""
+                                    df_det2.loc[mask_row, "Canje_Stock_Base_Adicional"] = ""
+                                    df_det2.loc[mask_row, "Canje_Locacion_Adicional"] = ""
+                                    df_det2.loc[mask_row, "Canje_Ajuste_Cantidad_Adicional"] = ""
+                        df_det2 = df_det2.drop(columns=["__row_pos__"], errors="ignore")
                         
                         ok = guardar_detalle_modificado(id_sel, df_det2)
                         if ok:
