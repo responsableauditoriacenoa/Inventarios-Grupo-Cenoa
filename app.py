@@ -29,7 +29,6 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
-DB_BACKEND = "SQLite" if DATABASE_URL.startswith("sqlite") else "Externa"
 
 SHEET_HIST = "Historial_Inventarios"
 SHEET_DET = "Detalle_Articulos"
@@ -750,11 +749,21 @@ def get_db_engine():
     connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
     return create_engine(DATABASE_URL, future=True, connect_args=connect_args)
 
+def is_sqlite_backend(engine=None) -> bool:
+    if engine is None:
+        engine = get_db_engine()
+    try:
+        return engine.dialect.name == "sqlite"
+    except Exception:
+        return DATABASE_URL.startswith("sqlite")
+
+DB_BACKEND = "SQLite" if is_sqlite_backend() else "Externa"
+
 def init_database():
     try:
         engine = get_db_engine()
         with engine.begin() as conn:
-            if DATABASE_URL.startswith("sqlite"):
+            if is_sqlite_backend(engine):
                 conn.execute(text("PRAGMA journal_mode=WAL"))
                 conn.execute(text("PRAGMA synchronous=NORMAL"))
             conn.execute(text("""
