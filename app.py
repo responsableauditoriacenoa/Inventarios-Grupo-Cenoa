@@ -1339,6 +1339,40 @@ def ensure_unique_columns(df: pd.DataFrame) -> pd.DataFrame:
         return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
     return df.loc[:, ~pd.Index(df.columns).duplicated(keep="last")].copy()
 
+def prepare_editable_detalle_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
+
+    editable_cols = [
+        "Justificacion",
+        "Justif_Validada",
+        "Validador",
+        "Fecha_Validacion",
+        "Tipo_Ajuste",
+        "Ajuste_Cantidad",
+        "Canje_Articulo",
+        "Canje_Descripcion",
+        "Canje_Costo_Rep",
+        "Canje_Stock_Base",
+        "Canje_Locacion",
+        "Canje_Ajuste_Cantidad",
+        "Requiere_Ajuste_Adicional",
+        "Tipo_Ajuste_Adicional",
+        "Ajuste_Cantidad_Adicional",
+        "Canje_Articulo_Adicional",
+        "Canje_Descripcion_Adicional",
+        "Canje_Costo_Rep_Adicional",
+        "Canje_Stock_Base_Adicional",
+        "Canje_Locacion_Adicional",
+        "Canje_Ajuste_Cantidad_Adicional",
+    ]
+
+    df = df.copy()
+    for col in editable_cols:
+        if col in df.columns:
+            df[col] = df[col].astype("object")
+    return df
+
 def cargar_detalle(id_inv: str) -> pd.DataFrame:
     df = read_gspread_worksheet(SHEET_DET)
     if df.empty or "ID_Inventario" not in df.columns:
@@ -2147,7 +2181,7 @@ elif modulo_activo == "justificaciones":
                         st.divider()
                     
                     if st.button("💾 Guardar justificaciones"):
-                        df_det2 = df_det.copy()
+                        df_det2 = prepare_editable_detalle_columns(df_det.copy())
                         for row_pos, just in justificaciones_dict.items():
                             df_det2.loc[df_det2["__row_pos__"] == row_pos, "Justificacion"] = normalize_cell_value(just)
                         df_det2 = df_det2.drop(columns=["__row_pos__"], errors="ignore")
@@ -2332,7 +2366,7 @@ elif modulo_activo == "justificaciones":
                             st.error("Hay canjes con código inválido. Corregí los códigos antes de guardar.")
                             st.stop()
 
-                        df_det2 = df_det.copy()
+                        df_det2 = prepare_editable_detalle_columns(df_det.copy())
                         for row_pos, val in validaciones_dict.items():
                             mask_row = df_det2["__row_pos__"] == row_pos
                             df_det2.loc[mask_row, "Justif_Validada"] = normalize_cell_value(val)
