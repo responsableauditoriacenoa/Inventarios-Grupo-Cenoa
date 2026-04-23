@@ -1649,13 +1649,14 @@ def construir_resumen_historial(df_hist_cerrados: pd.DataFrame | None = None) ->
 def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
     """Update inventory details"""
     try:
+        df_mod = df_mod.loc[:, ~pd.Index(df_mod.columns).duplicated(keep="last")].copy()
         df_all = read_gspread_worksheet(SHEET_DET)
         if df_all.empty:
             ok, msg = write_gspread_worksheet(SHEET_DET, df_mod)
             log_audit("guardar_detalle", id_inv, len(df_mod), "OK" if ok else "ERROR", msg if msg else "Creó hoja o sobreescribió")
             return bool(ok)
 
-        df_all = df_all.copy()
+        df_all = df_all.loc[:, ~pd.Index(df_all.columns).duplicated(keep="last")].copy()
         mask = df_all["ID_Inventario"].astype(str) == str(id_inv)
         df_rest = df_all.loc[~mask].copy()
         df_final = pd.concat([df_rest, df_mod], ignore_index=True)
@@ -1665,6 +1666,20 @@ def guardar_detalle_modificado(id_inv: str, df_mod: pd.DataFrame):
     except Exception as e:
         log_audit("guardar_detalle", id_inv, 0, "ERROR", str(e))
         return False
+
+def normalize_cell_value(value):
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, (pd.Series, pd.Index, np.ndarray, list, tuple)):
+        if len(value) == 0:
+            return ""
+        if len(value) == 1:
+            return normalize_cell_value(value[0])
+        return json.dumps([normalize_cell_value(v) for v in value], ensure_ascii=False)
+    try:
+        return "" if pd.isna(value) else value
+    except Exception:
+        return value
 
 def set_detalle_value(df: pd.DataFrame, row_idx, column: str, value):
     """Set a detail value preserving the original row index used by the UI."""
@@ -1679,7 +1694,7 @@ def set_detalle_value(df: pd.DataFrame, row_idx, column: str, value):
     if col_positions.size == 0:
         return
 
-    scalar_value = value.item() if isinstance(value, np.generic) else value
+    scalar_value = normalize_cell_value(value)
     for row_pos in row_positions:
         for col_pos in col_positions:
             df.iat[int(row_pos), int(col_pos)] = scalar_value
