@@ -1661,12 +1661,19 @@ def set_detalle_value(df: pd.DataFrame, row_idx, column: str, value):
     """Set a detail value preserving the original row index used by the UI."""
     if column not in df.columns:
         df[column] = ""
-    if row_idx in df.index:
-        df.at[row_idx, column] = value
+
+    row_positions = np.flatnonzero(df.index.to_numpy() == row_idx)
+    if row_positions.size == 0:
         return
-    mask = df.index == row_idx
-    if mask.any():
-        df.loc[mask, column] = value
+
+    col_positions = np.flatnonzero(df.columns.to_numpy() == column)
+    if col_positions.size == 0:
+        return
+
+    scalar_value = value.item() if isinstance(value, np.generic) else value
+    for row_pos in row_positions:
+        for col_pos in col_positions:
+            df.iat[int(row_pos), int(col_pos)] = scalar_value
 
 def cerrar_inventario(id_inv: str, usuario: str):
     """Close inventory"""
